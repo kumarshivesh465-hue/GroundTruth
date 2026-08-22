@@ -1,0 +1,85 @@
+<!doctype html>
+<!--
+  STANDALONE LEARNING SCRIPT \u2014 not part of the app.
+  Opens the phone/laptop camera and draws live object-detection boxes using
+  MediaPipe's on-device Object Detector. Use this to learn the API and to
+  sanity-check detection quality/lighting before the event.
+-->
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>MediaPipe object detector test</title>
+  <style>
+    body { font-family: monospace; max-width: 700px; margin: 40px auto; padding: 0 16px; }
+    #wrap { position: relative; width: 100%; max-width: 480px; }
+    video, canvas { width: 100%; border-radius: 8px; }
+    canvas { position: absolute; top: 0; left: 0; }
+    button { padding: 10px 16px; font-size: 14px; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <h2>MediaPipe Object Detector test</h2>
+  <button id="start">Start camera + detection</button>
+  <div id="wrap">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+  </div>
+
+  <script type="module">
+    import {
+      ObjectDetector,
+      FilesetResolver,
+    } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('overlay');
+    const ctx = canvas.getContext('2d');
+
+    document.getElementById('start').addEventListener('click', async () => {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+      });
+      video.srcObject = stream;
+      await video.play();
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      const vision = await FilesetResolver.forVisionTasks(
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+      );
+
+      // Pretrained, general-purpose model \u2014 good for boxes/items/people,
+      // NOT for fine-grained damage detection (see PRD Section 7.3).
+      const detector = await ObjectDetector.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath:
+            'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/int8/1/efficientdet_lite0.tflite',
+          delegate: 'GPU',
+        },
+        scoreThreshold: 0.4,
+        runningMode: 'VIDEO',
+      });
+
+      function loop() {
+        const result = detector.detectForVideo(video, performance.now());
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = '#02C39A';
+        ctx.lineWidth = 3;
+        ctx.font = '16px monospace';
+        ctx.fillStyle = '#02C39A';
+
+        for (const d of result.detections) {
+          const box = d.boundingBox;
+          ctx.strokeRect(box.originX, box.originY, box.width, box.height);
+          const label = d.categories[0]?.categoryName ?? '?';
+          const score = (d.categories[0]?.score ?? 0).toFixed(2);
+          ctx.fillText(`${label} (${score})`, box.originX, box.originY - 6);
+        }
+        requestAnimationFrame(loop);
+      }
+      loop();
+    });
+  </script>
+</body>
+</html>
