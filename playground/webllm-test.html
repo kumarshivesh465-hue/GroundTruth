@@ -1,0 +1,78 @@
+<!doctype html>
+<!--
+  STANDALONE LEARNING SCRIPT \u2014 not part of the app.
+  Open this file via a local server (not file://) and click "Load model"
+  to see WebLLM download and run a small model fully in-browser.
+  Use this only to learn the API shape before the event; the real
+  reconciliation prompt gets built during the 30-hour window.
+
+  Why not file://: browsers block module workers and some WebGPU/cache
+  APIs on the file:// origin. Serve it, e.g.:
+    npx serve playground
+  or open it via the Vite dev server at /playground/webllm-test.html
+-->
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>WebLLM test</title>
+  <style>
+    body { font-family: monospace; max-width: 700px; margin: 40px auto; padding: 0 16px; }
+    button { padding: 10px 16px; font-size: 14px; }
+    #log { white-space: pre-wrap; background: #f2f8f7; padding: 12px; border-radius: 8px; margin-top: 16px; min-height: 120px; }
+  </style>
+</head>
+<body>
+  <h2>WebLLM quickstart</h2>
+  <p>Checks that a small local model loads and runs via WebGPU on this device.</p>
+  <button id="run">Load model &amp; run test prompt</button>
+  <div id="log">Idle.</div>
+
+  <script type="module">
+    const logEl = document.getElementById('log');
+    const log = (msg) => { logEl.textContent += '\n' + msg; console.log(msg); };
+
+    document.getElementById('run').addEventListener('click', async () => {
+      logEl.textContent = 'Checking WebGPU...';
+
+      if (!navigator.gpu) {
+        log('WebGPU is NOT available in this browser. WebLLM cannot run here.');
+        return;
+      }
+      log('WebGPU available. Importing WebLLM from CDN...');
+
+      const webllm = await import('https://esm.run/@mlc-ai/web-llm');
+
+      // Start with the smallest model for a fast first test.
+      // Swap to "Qwen2.5-1.5B-Instruct-q4f16_1-MLC" once this works,
+      // to check quality/speed trade-off on the actual loaner phone.
+      const MODEL = 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
+
+      log(`Loading ${MODEL} (first run downloads ~1GB+, then caches offline)...`);
+
+      const engine = await webllm.CreateMLCEngine(MODEL, {
+        initProgressCallback: (p) => log(p.text),
+      });
+
+      log('Model loaded. Running a test reconciliation-style prompt...');
+
+      const reply = await engine.chat.completions.create({
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You compare a detected-evidence list against a spoken claim ' +
+              'and reply with MATCH or MISMATCH plus one short reason.',
+          },
+          {
+            role: 'user',
+            content:
+              'Evidence: 8 boxes detected. Claim: "10 boxes, all in good condition."',
+          },
+        ],
+      });
+
+      log('\nModel reply:\n' + reply.choices[0].message.content);
+    });
+  </script>
+</body>
+</html>
