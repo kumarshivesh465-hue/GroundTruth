@@ -4,8 +4,7 @@
 
 GroundTruth is an offline-first Progressive Web App that independently verifies field-delivery claims — catching LPG cylinder under-filling and tampering in seconds, entirely on the phone, with zero connectivity required.
 
-🔗 **Live demo:** [zesty-elf-f9f17e.netlify.app](https://6a89e05ae350dfd664c35636--zesty-elf-f9f17e.netlify.app/)
-
+&#x20;🔗 \*\*Live demo:\*\* \[splendorous-sable-b083e5.netlify.app](https://splendorous-sable-b083e5.netlify.app/)
 ---
 
 ## The problem
@@ -32,22 +31,22 @@ Every step runs client-side, in the browser — no backend, no network call at i
 
 ## Why the phone
 
-- **Camera** — the primary evidence source, detecting what's actually in front of it
-- **Speaker + mic** — an active tone sweep senses fill-level via resonance, no extra hardware needed
-- **On-device GPU (WebGPU)** — runs the local LLM reconciliation entirely on-device
-- **Offline-first** — the full pipeline works with zero connectivity, exactly where field verification is needed most
+* **Camera** — the primary evidence source, detecting what's actually in front of it
+* **Speaker + mic** — an active tone sweep senses fill-level via resonance, no extra hardware needed
+* **On-device GPU (WebGPU)** — runs the local LLM reconciliation entirely on-device
+* **Offline-first** — the full pipeline works with zero connectivity, exactly where field verification is needed most
 
 ## Tech stack
 
-| Layer | Technology |
-|---|---|
-| App shell | [Vite](https://vitejs.dev/) + [vite-plugin-pwa](https://vite-pwa-org.netlify.app/) |
-| Vision | [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe) — Object Detector |
-| Speech | Web Speech API / [transformers.js](https://huggingface.co/docs/transformers.js) (Whisper) |
-| Acoustic sensing | Web Audio API — tone sweep + FFT analysis |
-| Reasoning | [WebLLM](https://webllm.mlc.ai/) — `Qwen2.5-1.5B-Instruct`, on-device via WebGPU |
-| Storage | IndexedDB |
-| Hosting | Netlify |
+|Layer|Technology|
+|-|-|
+|App shell|[Vite](https://vitejs.dev/) + [vite-plugin-pwa](https://vite-pwa-org.netlify.app/)|
+|Vision|[MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe) — Object Detector|
+|Speech|Web Speech API / [transformers.js](https://huggingface.co/docs/transformers.js) (Whisper)|
+|Acoustic sensing|Web Audio API — tone sweep + FFT analysis|
+|Reasoning|[WebLLM](https://webllm.mlc.ai/) — `Qwen2.5-1.5B-Instruct`, on-device via WebGPU|
+|Storage|IndexedDB|
+|Hosting|Netlify|
 
 ## Quick start
 
@@ -59,8 +58,9 @@ npm run build     # production build → dist/
 
 Camera and mic access require a secure context — use the deployed URL above, or `localhost` during local development.
 
-## License & credits
+## License \& credits
 
 MIT License.
 
 Built with [Vite](https://vitejs.dev/), [MediaPipe](https://ai.google.dev/edge/mediapipe), [WebLLM](https://webllm.mlc.ai/), and [transformers.js](https://huggingface.co/docs/transformers.js).
+
