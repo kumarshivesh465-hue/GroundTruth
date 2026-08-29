@@ -4,7 +4,7 @@
 
 GroundTruth is an offline-first Progressive Web App that independently verifies field-delivery claims — catching LPG cylinder under-filling and tampering in seconds, entirely on the phone, with zero connectivity required.
 
-🔗 **Live demo:** [splendorous-sable-b083e5.netlify.app](https://6a89e05ae350dfd664c35636--splendorous-sable-b083e5.netlify.app/)
+🔗 **Live demo:** [splendorous-sable-b083e5.netlify.app](https://splendorous-sable-b083e5.netlify.app/)
 
 ---
 
