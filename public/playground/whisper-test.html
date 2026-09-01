@@ -1,0 +1,246 @@
+<!doctype html>
+<!--
+  STANDALONE LEARNING SCRIPT \u2014 not part of the app.
+  Tests fully on-device speech-to-text for the Claim screen, using
+  transformers.js running a small Whisper model \u2014 no network call once
+  the model is cached.
+
+  Pattern adapted from Xenova's official reference app:
+  https://github.com/xenova/whisper-web
+  That app is a full React/worker-based UI; this is the same core idea
+  (record -> resample to 16kHz mono -> transformers.js ASR pipeline)
+  collapsed into one plain HTML file to match this repo's other
+  playground pages.
+
+  Method:
+    1. Tap "Load model" once (downloads ~40\u201375MB, then cached offline).
+    2. Tap "Record", say your test claim out loud, tap "Stop".
+    3. Tap "Transcribe" and read the result.
+    4. Mark whether the transcript looks right, then "Log Trial".
+    5. Do at least 10 trials with different phrasings/background noise
+       levels, then copy the summary into the deck.
+
+  Note: this is the fully-local alternative to the Web Speech API. Web
+  Speech API is faster to wire up but sends audio to Google's servers;
+  this is slower to set up but keeps everything on-device, matching the
+  "zero network calls at inference time" claim in the pitch.
+-->
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Whisper speech-to-text test</title>
+  <style>
+    body { font-family: monospace; max-width: 720px; margin: 40px auto; padding: 0 16px; }
+    button { padding: 10px 16px; font-size: 14px; margin: 4px 6px 4px 0; cursor: pointer; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    section { border: 1px solid #d8e4e2; border-radius: 8px; padding: 14px; margin-top: 18px; }
+    section h3 { margin-top: 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #e5eeed; }
+    .correct { color: #02875e; font-weight: bold; }
+    .wrong { color: #c0392b; font-weight: bold; }
+    .stat { display: inline-block; background: #f2f8f7; padding: 10px 16px; border-radius: 8px; margin: 4px 8px 4px 0; }
+    .stat b { display: block; font-size: 22px; color: #028090; }
+    #transcript { background: #053b3e; color: #cfefea; padding: 12px; border-radius: 8px; margin-top: 10px; min-height: 40px; font-size: 14px; }
+    #summary-out { white-space: pre-wrap; background: #053b3e; color: #cfefea; padding: 12px; border-radius: 8px; margin-top: 10px; font-size: 12.5px; }
+    #log { white-space: pre-wrap; background: #f2f8f7; padding: 12px; border-radius: 8px; margin-top: 16px; min-height: 60px; }
+    .rec-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #c0392b; margin-right: 6px; opacity: 0; }
+    .rec-dot.active { opacity: 1; animation: pulse 1s infinite; }
+    @keyframes pulse { 50% { opacity: 0.3; } }
+  </style>
+</head>
+<body>
+  <h2>Whisper on-device speech-to-text test</h2>
+  <p>Fully local claim transcription \u2014 no server, no network call once the model's cached.</p>
+
+  <section>
+    <h3>Step 1 \u2014 Load the model</h3>
+    <button id="load-model">Load model</button>
+    <span id="model-status" style="font-size:13px;color:#5a6b6c;">Not loaded.</span>
+  </section>
+
+  <section>
+    <h3>Step 2 \u2014 Record a claim</h3>
+    <button id="record" disabled><span class="rec-dot" id="rec-dot"></span>Record</button>
+    <button id="stop" disabled>Stop</button>
+    <button id="transcribe" disabled>Transcribe</button>
+    <div id="transcript">Transcript will appear here.</div>
+  </section>
+
+  <section>
+    <h3>Step 3 \u2014 Log a trial</h3>
+    <label><input type="radio" name="correct" value="yes" /> Transcript is accurate (or close enough to be usable)</label><br />
+    <label><input type="radio" name="correct" value="no" /> Transcript is wrong / garbled</label><br /><br />
+    <button id="log-trial" disabled>Log Trial</button>
+    <button id="clear-trials">Clear all trials</button>
+  </section>
+
+  <section id="results-section" style="display:none;">
+    <h3>Results</h3>
+    <div id="stats"></div>
+    <table>
+      <thead><tr><th>#</th><th>Transcript</th><th>Result</th></tr></thead>
+      <tbody id="trials-body"></tbody>
+    </table>
+    <button id="copy-summary">Copy results summary for the deck</button>
+    <div id="summary-out" style="display:none;"></div>
+  </section>
+
+  <div id="log">Idle. Tap "Load model" to begin.</div>
+
+  <script type="module">
+    const logEl = document.getElementById('log');
+    const log = (msg) => { logEl.textContent += '\n' + msg; console.log(msg); };
+
+    let transcriber = null;
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let lastAudioBlob = null;
+    let lastTranscript = null;
+    const trials = [];
+
+    document.getElementById('load-model').addEventListener('click', async () => {
+      document.getElementById('model-status').textContent = 'Loading (first run downloads the model, then it\'s cached offline)...';
+      log('Importing transformers.js from CDN...');
+
+      const { pipeline } = await import('https://esm.run/@huggingface/transformers');
+
+      // Small English-only model for a fast first test. Swap to the
+      // multilingual 'Xenova/whisper-tiny' if you need Tamil/Hindi claims.
+      transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en', {
+        progress_callback: (p) => {
+          if (p.status === 'progress') {
+            document.getElementById('model-status').textContent = `Loading: ${p.file} (${Math.round(p.progress || 0)}%)`;
+          }
+        },
+      });
+
+      document.getElementById('model-status').textContent = 'Model loaded and cached.';
+      document.getElementById('record').disabled = false;
+      log('Model ready. Tap Record and say a test claim out loud.');
+    });
+
+    document.getElementById('record').addEventListener('click', async () => {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordedChunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = (e) => recordedChunks.push(e.data);
+      mediaRecorder.onstop = () => {
+        lastAudioBlob = new Blob(recordedChunks, { type: 'audio/webm' });
+        document.getElementById('transcribe').disabled = false;
+        log('Recording captured. Tap Transcribe.');
+      };
+      mediaRecorder.start();
+      document.getElementById('rec-dot').classList.add('active');
+      document.getElementById('record').disabled = true;
+      document.getElementById('stop').disabled = false;
+      log('Recording... speak your test claim now.');
+    });
+
+    document.getElementById('stop').addEventListener('click', () => {
+      mediaRecorder.stop();
+      mediaRecorder.stream.getTracks().forEach((t) => t.stop());
+      document.getElementById('rec-dot').classList.remove('active');
+      document.getElementById('record').disabled = false;
+      document.getElementById('stop').disabled = true;
+    });
+
+    async function decodeToFloat32Mono16k(blob) {
+      const arrayBuffer = await blob.arrayBuffer();
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const decoded = await audioCtx.decodeAudioData(arrayBuffer);
+
+      // Resample to 16kHz mono \u2014 what Whisper expects.
+      const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * 16000), 16000);
+      const source = offline.createBufferSource();
+      source.buffer = decoded;
+      source.connect(offline.destination);
+      source.start();
+      const rendered = await offline.startRendering();
+      return rendered.getChannelData(0);
+    }
+
+    document.getElementById('transcribe').addEventListener('click', async () => {
+      if (!lastAudioBlob || !transcriber) return;
+      document.getElementById('transcript').textContent = 'Transcribing...';
+      log('Resampling audio to 16kHz mono and running inference...');
+
+      const audioData = await decodeToFloat32Mono16k(lastAudioBlob);
+      const result = await transcriber(audioData);
+
+      lastTranscript = result.text.trim();
+      document.getElementById('transcript').textContent = lastTranscript || '(empty transcript)';
+      document.getElementById('log-trial').disabled = false;
+      log('Transcript: "' + lastTranscript + '"');
+    });
+
+    document.getElementById('log-trial').addEventListener('click', () => {
+      const correctEl = document.querySelector('input[name="correct"]:checked');
+      if (!correctEl) return log('Mark whether the transcript was accurate first.');
+      if (lastTranscript === null) return log('Transcribe a recording first.');
+
+      const correct = correctEl.value === 'yes';
+      trials.push({ n: trials.length + 1, transcript: lastTranscript, correct });
+      renderResults();
+      log(`Trial ${trials.length} logged \u2014 ${correct ? 'CORRECT' : 'WRONG'}`);
+
+      lastTranscript = null;
+      document.getElementById('log-trial').disabled = true;
+      document.getElementById('transcribe').disabled = true;
+      document.querySelectorAll('input[name="correct"]').forEach((r) => (r.checked = false));
+    });
+
+    document.getElementById('clear-trials').addEventListener('click', () => {
+      trials.length = 0;
+      renderResults();
+      log('All logged trials cleared.');
+    });
+
+    function renderResults() {
+      const section = document.getElementById('results-section');
+      if (trials.length === 0) {
+        section.style.display = 'none';
+        return;
+      }
+      section.style.display = 'block';
+
+      const correctCount = trials.filter((t) => t.correct).length;
+      const accuracy = (correctCount / trials.length) * 100;
+
+      document.getElementById('stats').innerHTML = `
+        <div class="stat"><b>${trials.length}</b>trials logged</div>
+        <div class="stat"><b>${correctCount}/${trials.length}</b>correct</div>
+        <div class="stat"><b>${accuracy.toFixed(0)}%</b>accuracy</div>
+      `;
+
+      const tbody = document.getElementById('trials-body');
+      tbody.innerHTML = trials.map((t) => `
+        <tr>
+          <td>${t.n}</td>
+          <td>${t.transcript}</td>
+          <td class="${t.correct ? 'correct' : 'wrong'}">${t.correct ? 'Correct' : 'Wrong'}</td>
+        </tr>
+      `).join('');
+    }
+
+    document.getElementById('copy-summary').addEventListener('click', async () => {
+      const correctCount = trials.filter((t) => t.correct).length;
+      const accuracy = (correctCount / trials.length) * 100;
+      const summary =
+        `In ${trials.length} test trials with on-device Whisper transcription, ` +
+        `${correctCount}/${trials.length} transcripts were accurate (${accuracy.toFixed(0)}% accuracy), ` +
+        `fully offline with zero network calls at inference time.`;
+
+      const out = document.getElementById('summary-out');
+      out.textContent = summary;
+      out.style.display = 'block';
+      try {
+        await navigator.clipboard.writeText(summary);
+        log('Summary copied to clipboard \u2014 paste it straight into the deck.');
+      } catch {
+        log('Could not access clipboard \u2014 copy the text shown below manually.');
+      }
+    });
+  </script>
+</body>
+</html>
