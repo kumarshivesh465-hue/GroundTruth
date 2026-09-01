@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#028090" />
+    <meta name="theme-color" content="#053b3e" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icon-192.png" />
     <title>GroundTruth</title>
@@ -12,18 +12,15 @@
     <div id="app">
       <header class="topbar">
         <span class="brand">GroundTruth</span>
-        <span class="status" id="net-status">checking\u2026</span>
+        <span class="status-pill" id="net-status">
+          <span class="status-dot" id="net-dot"></span>
+          <span id="net-label">checking\u2026</span>
+        </span>
       </header>
 
       <main id="screen-outlet"></main>
 
-      <nav class="tabbar" id="tabbar">
-        <button data-screen="home" class="tab active">Home</button>
-        <button data-screen="capture" class="tab">Capture</button>
-        <button data-screen="claim" class="tab">Claim</button>
-        <button data-screen="reconcile" class="tab">Reconcile</button>
-        <button data-screen="report" class="tab">Report</button>
-      </nav>
+      <nav class="tabbar" id="tabbar"></nav>
     </div>
 
     <script type="module" src="/src/main.js"></script>
