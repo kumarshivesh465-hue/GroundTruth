@@ -17,6 +17,16 @@
        order (don't always alternate \u2014 that can flatter the accuracy).
     6. Tap "Copy results summary" and paste the output straight into the
        "Quantifiable Outcomes" box in the deck.
+
+  Prior art check: this sweep-and-analyze-the-response technique matches
+  the FreqRespAnalysis method documented in the academic toolkit
+  yctung/LibAcousticSensing (github.com/yctung/LibAcousticSensing) \u2014
+  confirmation the underlying idea is grounded, not invented from nothing.
+  Their toolkit itself isn't usable here: it's Java/MATLAB, targets native
+  Android/iOS apps, and requires a network-connected MATLAB server, which
+  is incompatible with this being a fully offline, in-browser PWA. This
+  file is an independent, from-scratch Web Audio API implementation of
+  the same general principle, not a port of their code.
 -->
 <html>
 <head>
