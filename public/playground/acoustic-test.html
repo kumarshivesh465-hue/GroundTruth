@@ -1,8 +1,8 @@
 <!doctype html>
 <!--
-  STANDALONE LEARNING SCRIPT \u2014 not part of the app.
+  STANDALONE LEARNING SCRIPT — not part of the app.
   Tests the "active acoustic sensing" idea AND logs real trials so you get
-  a genuine accuracy number for the pitch deck \u2014 no manual tallying.
+  a genuine accuracy number for the pitch deck — no manual tallying.
 
   Method:
     1. Hold the phone's speaker+mic against (or very close to) a sealed
@@ -14,13 +14,13 @@
        container ACTUALLY is, then tap "Log Trial". The tool compares its
        own guess to the truth and keeps a running accuracy score.
     5. Do at least 10 trials, mixing full and empty containers in random
-       order (don't always alternate \u2014 that can flatter the accuracy).
+       order (don't always alternate — that can flatter the accuracy).
     6. Tap "Copy results summary" and paste the output straight into the
        "Quantifiable Outcomes" box in the deck.
 
   Prior art check: this sweep-and-analyze-the-response technique matches
   the FreqRespAnalysis method documented in the academic toolkit
-  yctung/LibAcousticSensing (github.com/yctung/LibAcousticSensing) \u2014
+  yctung/LibAcousticSensing (github.com/yctung/LibAcousticSensing) —
   confirmation the underlying idea is grounded, not invented from nothing.
   Their toolkit itself isn't usable here: it's Java/MATLAB, targets native
   Android/iOS apps, and requires a network-connected MATLAB server, which
@@ -51,16 +51,16 @@
 </head>
 <body>
   <h2>Acoustic sensing feasibility test</h2>
-  <p>Hold the phone against a sealed container. Capture, log real trials, and get a genuine accuracy number \u2014 no guessing, no invented stats.</p>
+  <p>Hold the phone against a sealed container. Capture, log real trials, and get a genuine accuracy number — no guessing, no invented stats.</p>
 
   <section>
-    <h3>Step 1 \u2014 Capture</h3>
+    <h3>Step 1 — Capture</h3>
     <button id="capture">Play sweep + capture</button>
     <canvas id="viz"></canvas>
   </section>
 
   <section>
-    <h3>Step 2 \u2014 Set your two references (do this once)</h3>
+    <h3>Step 2 — Set your two references (do this once)</h3>
     <p style="font-size:13px;color:#5a6b6c">Pick one known-full and one known-empty container. Capture each, then save it as the matching reference below.</p>
     <button id="save-full">Save last capture as "Full" reference</button>
     <button id="save-empty">Save last capture as "Empty" reference</button>
@@ -68,7 +68,7 @@
   </section>
 
   <section>
-    <h3>Step 3 \u2014 Log real trials</h3>
+    <h3>Step 3 — Log real trials</h3>
     <p style="font-size:13px;color:#5a6b6c">After each new capture, tell the tool what the container actually is, then log it. Aim for 10+ trials, order mixed/random.</p>
     <label><input type="radio" name="actual" value="full" /> This container is actually FULL</label><br />
     <label><input type="radio" name="actual" value="empty" /> This container is actually EMPTY</label><br /><br />
@@ -146,8 +146,8 @@
     }
 
     function updateRefStatus() {
-      const f = references.full ? '\u2713 saved' : '\u2717 not saved';
-      const e = references.empty ? '\u2713 saved' : '\u2717 not saved';
+      const f = references.full ? '✓ saved' : '✗ not saved';
+      const e = references.empty ? '✓ saved' : '✗ not saved';
       document.getElementById('ref-status').textContent = `Full reference: ${f}   |   Empty reference: ${e}`;
       document.getElementById('log-trial').disabled = !(references.full && references.empty);
     }
@@ -170,7 +170,7 @@
       osc.frequency.setValueAtTime(SWEEP_START_HZ, audioCtx.currentTime);
       osc.frequency.exponentialRampToValueAtTime(SWEEP_END_HZ, audioCtx.currentTime + SWEEP_DURATION_S);
 
-      log('Playing sweep (' + SWEEP_START_HZ + 'Hz \u2192 ' + SWEEP_END_HZ + 'Hz) and recording response...');
+      log('Playing sweep (' + SWEEP_START_HZ + 'Hz → ' + SWEEP_END_HZ + 'Hz) and recording response...');
       osc.start();
 
       const freqData = new Uint8Array(analyser.frequencyBinCount);
@@ -233,7 +233,7 @@
 
       trials.push({ n: trials.length + 1, predicted, actual, correct, separation });
       renderResults();
-      log(`Trial ${trials.length} logged: predicted ${predicted.toUpperCase()}, actual ${actual.toUpperCase()} \u2014 ${correct ? 'CORRECT' : 'WRONG'}`);
+      log(`Trial ${trials.length} logged: predicted ${predicted.toUpperCase()}, actual ${actual.toUpperCase()} — ${correct ? 'CORRECT' : 'WRONG'}`);
       lastProfile = null;
     });
 
@@ -288,9 +288,9 @@
       out.style.display = 'block';
       try {
         await navigator.clipboard.writeText(summary);
-        log('Summary copied to clipboard \u2014 paste it straight into the deck.');
+        log('Summary copied to clipboard — paste it straight into the deck.');
       } catch {
-        log('Could not access clipboard \u2014 copy the text shown below manually.');
+        log('Could not access clipboard — copy the text shown below manually.');
       }
     });
 

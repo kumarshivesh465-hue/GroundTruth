@@ -1,8 +1,8 @@
 <!doctype html>
 <!--
-  STANDALONE LEARNING SCRIPT \u2014 not part of the app.
+  STANDALONE LEARNING SCRIPT — not part of the app.
   Tests fully on-device speech-to-text for the Claim screen, using
-  transformers.js running a small Whisper model \u2014 no network call once
+  transformers.js running a small Whisper model — no network call once
   the model is cached.
 
   Pattern adapted from Xenova's official reference app:
@@ -13,7 +13,7 @@
   playground pages.
 
   Method:
-    1. Tap "Load model" once (downloads ~40\u201375MB, then cached offline).
+    1. Tap "Load model" once (downloads ~40–75MB, then cached offline).
     2. Tap "Record", say your test claim out loud, tap "Stop".
     3. Tap "Transcribe" and read the result.
     4. Mark whether the transcript looks right, then "Log Trial".
@@ -51,16 +51,16 @@
 </head>
 <body>
   <h2>Whisper on-device speech-to-text test</h2>
-  <p>Fully local claim transcription \u2014 no server, no network call once the model's cached.</p>
+  <p>Fully local claim transcription — no server, no network call once the model's cached.</p>
 
   <section>
-    <h3>Step 1 \u2014 Load the model</h3>
+    <h3>Step 1 — Load the model</h3>
     <button id="load-model">Load model</button>
     <span id="model-status" style="font-size:13px;color:#5a6b6c;">Not loaded.</span>
   </section>
 
   <section>
-    <h3>Step 2 \u2014 Record a claim</h3>
+    <h3>Step 2 — Record a claim</h3>
     <button id="record" disabled><span class="rec-dot" id="rec-dot"></span>Record</button>
     <button id="stop" disabled>Stop</button>
     <button id="transcribe" disabled>Transcribe</button>
@@ -68,7 +68,7 @@
   </section>
 
   <section>
-    <h3>Step 3 \u2014 Log a trial</h3>
+    <h3>Step 3 — Log a trial</h3>
     <label><input type="radio" name="correct" value="yes" /> Transcript is accurate (or close enough to be usable)</label><br />
     <label><input type="radio" name="correct" value="no" /> Transcript is wrong / garbled</label><br /><br />
     <button id="log-trial" disabled>Log Trial</button>
@@ -150,7 +150,7 @@
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const decoded = await audioCtx.decodeAudioData(arrayBuffer);
 
-      // Resample to 16kHz mono \u2014 what Whisper expects.
+      // Resample to 16kHz mono — what Whisper expects.
       const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * 16000), 16000);
       const source = offline.createBufferSource();
       source.buffer = decoded;
@@ -182,7 +182,7 @@
       const correct = correctEl.value === 'yes';
       trials.push({ n: trials.length + 1, transcript: lastTranscript, correct });
       renderResults();
-      log(`Trial ${trials.length} logged \u2014 ${correct ? 'CORRECT' : 'WRONG'}`);
+      log(`Trial ${trials.length} logged — ${correct ? 'CORRECT' : 'WRONG'}`);
 
       lastTranscript = null;
       document.getElementById('log-trial').disabled = true;
@@ -236,9 +236,9 @@
       out.style.display = 'block';
       try {
         await navigator.clipboard.writeText(summary);
-        log('Summary copied to clipboard \u2014 paste it straight into the deck.');
+        log('Summary copied to clipboard — paste it straight into the deck.');
       } catch {
-        log('Could not access clipboard \u2014 copy the text shown below manually.');
+        log('Could not access clipboard — copy the text shown below manually.');
       }
     });
   </script>
