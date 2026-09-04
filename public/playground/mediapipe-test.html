@@ -1,13 +1,13 @@
 <!doctype html>
 <!--
-  STANDALONE LEARNING SCRIPT \u2014 not part of the app.
+  STANDALONE LEARNING SCRIPT — not part of the app.
   Opens the phone/laptop camera, draws live object-detection boxes using
   MediaPipe's on-device Object Detector, AND logs real trials so you get a
   genuine detection-reliability number for the pitch deck.
 
   Pattern adapted from Google's official sample:
   https://github.com/google-ai-edge/mediapipe-samples-web
-  (see src/tasks/object-detector.ts) \u2014 specifically its IMAGE vs VIDEO
+  (see src/tasks/object-detector.ts) — specifically its IMAGE vs VIDEO
   running-mode distinction. Our real Capture screen freezes a single frame
   and detects once, so "Freeze & Detect" below runs a genuine IMAGE-mode
   detection on that frozen frame (via detector.setOptions), not just a
@@ -17,10 +17,10 @@
     1. Tap "Start camera + detection" (continuous VIDEO-mode boxes, for
        framing/aiming only).
     2. Point at your test object, tap "Freeze & Detect" to run a real
-       single-shot IMAGE-mode detection \u2014 this is what the actual app does.
+       single-shot IMAGE-mode detection — this is what the actual app does.
     3. Tell the tool whether it correctly detected your object, then
        tap "Log Trial".
-    4. Do at least 10 trials \u2014 vary angle, distance, and lighting a bit,
+    4. Do at least 10 trials — vary angle, distance, and lighting a bit,
        since your demo conditions won't be perfectly controlled either.
     5. Tap "Copy results summary" and paste it into the deck.
 -->
@@ -59,7 +59,7 @@
   </div>
 
   <section>
-    <h3>Log a trial (freeze-frame, IMAGE mode \u2014 matches the real app)</h3>
+    <h3>Log a trial (freeze-frame, IMAGE mode — matches the real app)</h3>
     <button id="freeze" disabled>Freeze &amp; Detect</button>
     <button id="resume" disabled>Resume live view</button>
     <canvas id="frozen-frame"></canvas>
@@ -110,7 +110,7 @@
       log('Loading detector model...');
       const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
 
-      // Pretrained, general-purpose model \u2014 good for boxes/items/people,
+      // Pretrained, general-purpose model — good for boxes/items/people,
       // NOT for fine-grained damage detection (see PRD Section 7.3).
       detector = await ObjectDetector.createFromOptions(vision, {
         baseOptions: {
@@ -147,7 +147,7 @@
       frozenCtx.drawImage(video, 0, 0, frozenCanvas.width, frozenCanvas.height);
       frozenCanvas.style.display = 'block';
 
-      // Real single-shot IMAGE-mode detection \u2014 same distinction the
+      // Real single-shot IMAGE-mode detection — same distinction the
       // official MediaPipe sample makes between VIDEO and IMAGE modes.
       await detector.setOptions({ runningMode: 'IMAGE' });
       const result = detector.detect(frozenCanvas);
@@ -184,7 +184,7 @@
       const correct = correctEl.value === 'yes';
       trials.push({ n: trials.length + 1, label: frozenSnapshot.label, score: frozenSnapshot.score, correct });
       renderResults();
-      log(`Trial ${trials.length} logged: "${frozenSnapshot.label}" (${(frozenSnapshot.score * 100).toFixed(0)}%) \u2014 ${correct ? 'CORRECT' : 'WRONG'}`);
+      log(`Trial ${trials.length} logged: "${frozenSnapshot.label}" (${(frozenSnapshot.score * 100).toFixed(0)}%) — ${correct ? 'CORRECT' : 'WRONG'}`);
 
       frozenSnapshot = null;
       document.getElementById('snapshot-info').textContent = 'No frozen detection yet.';
@@ -242,9 +242,9 @@
       out.style.display = 'block';
       try {
         await navigator.clipboard.writeText(summary);
-        log('Summary copied to clipboard \u2014 paste it straight into the deck.');
+        log('Summary copied to clipboard — paste it straight into the deck.');
       } catch {
-        log('Could not access clipboard \u2014 copy the text shown below manually.');
+        log('Could not access clipboard — copy the text shown below manually.');
       }
     });
   </script>
