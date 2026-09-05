@@ -1,8 +1,8 @@
 <!doctype html>
 <!--
   STANDALONE LEARNING SCRIPT — not part of the app.
-  Open this file via a local server (not file://) and click "Load model"
-  to see WebLLM download and run a small model fully in-browser.
+  Open this file via a local server (not file://) and click a button to
+  see WebLLM download and run a small model fully in-browser.
   Use this only to learn the API shape before the event; the real
   reconciliation prompt gets built during the 30-hour window.
 
@@ -10,6 +10,13 @@
   APIs on the file:// origin. Serve it, e.g.:
     npx serve playground
   or open it via the Vite dev server at /playground/webllm-test.html
+
+  IMPORTANT LESSON LEARNED (found via real device testing): small models
+  will sometimes state a verdict word ("MATCH") that CONTRADICTS their own
+  reasoning written right below it. The fix isn't a bigger model first —
+  it's forcing the model to reason BEFORE it commits to a verdict, with
+  the verdict as a clearly-delimited final line. This file does that, and
+  automatically flags it if the verdict and reasoning still disagree.
 -->
 <html>
 <head>
@@ -17,62 +24,117 @@
   <title>WebLLM test</title>
   <style>
     body { font-family: monospace; max-width: 700px; margin: 40px auto; padding: 0 16px; }
-    button { padding: 10px 16px; font-size: 14px; }
+    button { padding: 10px 16px; font-size: 14px; margin: 4px 6px 4px 0; cursor: pointer; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
     #log { white-space: pre-wrap; background: #f2f8f7; padding: 12px; border-radius: 8px; margin-top: 16px; min-height: 120px; }
+    .verdict { font-weight: bold; padding: 2px 8px; border-radius: 6px; display: inline-block; margin: 6px 0; }
+    .verdict.ok { background: #d4f5ec; color: #02875e; }
+    .verdict.warn { background: #fbe0dd; color: #c0392b; }
   </style>
 </head>
 <body>
   <h2>WebLLM quickstart</h2>
-  <p>Checks that a small local model loads and runs via WebGPU on this device.</p>
-  <button id="run">Load model &amp; run test prompt</button>
+  <p>Checks that a small local model loads and runs via WebGPU on this device, and that its verdict actually matches its own reasoning.</p>
+  <button id="run-small">Load Llama-3.2-1B &amp; run test prompt</button>
+  <button id="run-big">Try Qwen2.5-1.5B instead</button>
   <div id="log">Idle.</div>
 
   <script type="module">
     const logEl = document.getElementById('log');
     const log = (msg) => { logEl.textContent += '\n' + msg; console.log(msg); };
+    const logHtml = (html) => { logEl.innerHTML += '\n' + html; };
 
-    document.getElementById('run').addEventListener('click', async () => {
+    let webllm = null;
+    let engine = null;
+    let loadedModel = null;
+
+    // Forces reasoning BEFORE the verdict, with the verdict on its own
+    // clearly-delimited final line — this is what fixes the
+    // verdict-contradicts-reasoning problem seen in early testing.
+    const SYSTEM_PROMPT =
+      'You compare a detected-evidence list against a spoken claim. ' +
+      'First, think through the comparison step by step in plain text, ' +
+      'checking each detail in the claim against the evidence. ' +
+      'Then, on a new final line, output exactly one of:\n' +
+      'VERDICT: MATCH\n' +
+      'VERDICT: MISMATCH\n' +
+      'That final line must be consistent with your reasoning above it.';
+
+    const USER_PROMPT =
+      'Evidence: 8 boxes detected. Claim: "10 boxes, all in good condition."';
+
+    function checkConsistency(text) {
+      const verdictMatch = text.match(/VERDICT:\s*(MATCH|MISMATCH)/i);
+      if (!verdictMatch) {
+        return { verdict: null, warning: 'No "VERDICT:" line found — the model didn\'t follow the format.' };
+      }
+      const verdict = verdictMatch[1].toUpperCase();
+      const reasoningText = text.slice(0, verdictMatch.index).toLowerCase();
+      const soundsLikeMismatch = /does not match|mismatch|doesn't match|different from|discrepanc/i.test(reasoningText);
+      const soundsLikeMatch = /matches the evidence|consistent with|does match|is accurate/i.test(reasoningText);
+
+      if (verdict === 'MATCH' && soundsLikeMismatch && !soundsLikeMatch) {
+        return { verdict, warning: 'Reasoning describes a MISMATCH but the verdict says MATCH — inconsistent.' };
+      }
+      if (verdict === 'MISMATCH' && soundsLikeMatch && !soundsLikeMismatch) {
+        return { verdict, warning: 'Reasoning describes a MATCH but the verdict says MISMATCH — inconsistent.' };
+      }
+      return { verdict, warning: null };
+    }
+
+    async function runTest(modelId) {
+      document.getElementById('run-small').disabled = true;
+      document.getElementById('run-big').disabled = true;
       logEl.textContent = 'Checking WebGPU...';
 
       if (!navigator.gpu) {
         log('WebGPU is NOT available in this browser. WebLLM cannot run here.');
+        document.getElementById('run-small').disabled = false;
+        document.getElementById('run-big').disabled = false;
         return;
       }
-      log('WebGPU available. Importing WebLLM from CDN...');
+      log('WebGPU available.');
 
-      const webllm = await import('https://esm.run/@mlc-ai/web-llm');
+      if (!webllm) {
+        log('Importing WebLLM from CDN...');
+        webllm = await import('https://esm.run/@mlc-ai/web-llm');
+      }
 
-      // Start with the smallest model for a fast first test.
-      // Swap to "Qwen2.5-1.5B-Instruct-q4f16_1-MLC" once this works,
-      // to check quality/speed trade-off on the actual loaner phone.
-      const MODEL = 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
+      if (loadedModel !== modelId) {
+        log(`Loading ${modelId} (first run downloads it, then it's cached offline)...`);
+        engine = await webllm.CreateMLCEngine(modelId, {
+          initProgressCallback: (p) => log(p.text),
+        });
+        loadedModel = modelId;
+      } else {
+        log(`${modelId} already loaded in this session.`);
+      }
 
-      log(`Loading ${MODEL} (first run downloads ~1GB+, then caches offline)...`);
-
-      const engine = await webllm.CreateMLCEngine(MODEL, {
-        initProgressCallback: (p) => log(p.text),
-      });
-
-      log('Model loaded. Running a test reconciliation-style prompt...');
+      log('Model loaded. Running the reconciliation test prompt...');
 
       const reply = await engine.chat.completions.create({
         messages: [
-          {
-            role: 'system',
-            content:
-              'You compare a detected-evidence list against a spoken claim ' +
-              'and reply with MATCH or MISMATCH plus one short reason.',
-          },
-          {
-            role: 'user',
-            content:
-              'Evidence: 8 boxes detected. Claim: "10 boxes, all in good condition."',
-          },
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: USER_PROMPT },
         ],
       });
 
-      log('\nModel reply:\n' + reply.choices[0].message.content);
-    });
+      const text = reply.choices[0].message.content;
+      log('\nModel reply:\n' + text);
+
+      const { verdict, warning } = checkConsistency(text);
+      if (warning) {
+        logHtml(`<div class="verdict warn">⚠ ${verdict ? 'Verdict: ' + verdict + ' — ' : ''}${warning}</div>`);
+      } else if (verdict) {
+        logHtml(`<div class="verdict ok">✓ Verdict: ${verdict} — consistent with its reasoning</div>`);
+      }
+
+      document.getElementById('run-small').disabled = false;
+      document.getElementById('run-big').disabled = false;
+    }
+
+    document.getElementById('run-small').addEventListener('click', () => runTest('Llama-3.2-1B-Instruct-q4f16_1-MLC'));
+    document.getElementById('run-big').addEventListener('click', () => runTest('Qwen2.5-1.5B-Instruct-q4f16_1-MLC'));
   </script>
 </body>
 </html>
