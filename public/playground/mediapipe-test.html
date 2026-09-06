@@ -114,7 +114,7 @@
       // NOT for fine-grained damage detection (see PRD Section 7.3).
       detector = await ObjectDetector.createFromOptions(vision, {
         baseOptions: {
-          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/int8/1/efficientdet_lite0.tflite',
+          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite2/int8/1/efficientdet_lite2.tflite',
           delegate: 'GPU',
         },
         scoreThreshold: 0.4,
@@ -149,7 +149,7 @@
 
       // Real single-shot IMAGE-mode detection — same distinction the
       // official MediaPipe sample makes between VIDEO and IMAGE modes.
-      await detector.setOptions({ runningMode: 'IMAGE' });
+      await detector.setOptions({ runningMode: \x27IMAGE\x27, baseOptions: { modelAssetPath: \x27https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite2/int8/1/efficientdet_lite2.tflite\x27, delegate: \x27GPU\x27 } });
       const result = detector.detect(frozenCanvas);
       await detector.setOptions({ runningMode: 'VIDEO' }); // restore for next live view
 
