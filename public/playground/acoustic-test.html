@@ -4,15 +4,29 @@
   Tests the "active acoustic sensing" idea AND logs real trials so you get
   a genuine accuracy number for the pitch deck — no manual tallying.
 
+  FIX (after real-device testing found ~36-41% accuracy — worse than
+  chance, and biased toward always guessing FULL): the original version
+  compared each capture to a SINGLE reference sample per class using raw
+  Euclidean distance. That distance is dominated by overall loudness —
+  how hard/consistently you pressed the phone against the container —
+  which varies more between captures than the actual full-vs-empty signal
+  does. Two changes fix this:
+    1. References are now the AVERAGE of several samples per class (3+
+       recommended), not just one — this cancels out per-capture noise.
+    2. Comparison now uses COSINE SIMILARITY (the angle between the two
+       frequency-response shapes) instead of raw distance — this is
+       naturally loudness-invariant, so it measures the SHAPE of the
+       response, not how loud the capture happened to be.
+
   Method:
     1. Hold the phone's speaker+mic against (or very close to) a sealed
        container.
     2. Tap "Play sweep + capture".
-    3. Save your first two captures as the "Full" and "Empty" REFERENCES
-       (pick one known-full and one known-empty container for this).
+    3. Build up your references: capture a KNOWN-FULL container 3+ times,
+       saving each as a "Full" sample; do the same for a KNOWN-EMPTY
+       container. More samples = a more robust average.
     4. For every trial after that: capture, tell the tool what the
-       container ACTUALLY is, then tap "Log Trial". The tool compares its
-       own guess to the truth and keeps a running accuracy score.
+       container ACTUALLY is, then tap "Log Trial".
     5. Do at least 10 trials, mixing full and empty containers in random
        order (don't always alternate — that can flatter the accuracy).
     6. Tap "Copy results summary" and paste the output straight into the
@@ -60,11 +74,12 @@
   </section>
 
   <section>
-    <h3>Step 2 — Set your two references (do this once)</h3>
-    <p style="font-size:13px;color:#5a6b6c">Pick one known-full and one known-empty container. Capture each, then save it as the matching reference below.</p>
-    <button id="save-full">Save last capture as "Full" reference</button>
-    <button id="save-empty">Save last capture as "Empty" reference</button>
-    <div id="ref-status" style="font-size:13px;margin-top:8px;">No references saved yet.</div>
+    <h3>Step 2 — Build your references (3+ samples per class recommended)</h3>
+    <p style="font-size:13px;color:#5a6b6c">Capture a KNOWN-FULL container several times, saving each as a "Full" sample. Do the same with a KNOWN-EMPTY container. More samples per class = a more robust, less noise-sensitive average.</p>
+    <button id="save-full">Add capture as "Full" sample</button>
+    <button id="save-empty">Add capture as "Empty" sample</button>
+    <button id="reset-refs">Reset references</button>
+    <div id="ref-status" style="font-size:13px;margin-top:8px;">No reference samples yet.</div>
   </section>
 
   <section>
@@ -98,7 +113,7 @@
     let audioCtx = null;
     let micStream = null;
     let lastProfile = null;
-    const references = { full: null, empty: null };
+    const refSamples = { full: [], empty: [] }; // arrays of captured profiles per class
     const trials = [];
 
     const FFT_SIZE = 2048;
@@ -139,17 +154,36 @@
       return out;
     }
 
-    function distance(a, b) {
-      let sum = 0;
-      for (let i = 0; i < a.length; i++) sum += (a[i] - b[i]) ** 2;
-      return Math.sqrt(sum);
+    // Cosine similarity: measures the ANGLE between two vectors, ignoring
+    // their magnitude. This is what makes comparisons robust to how hard
+    // you pressed the phone against the container — only the SHAPE of the
+    // frequency response matters, not its overall loudness.
+    function cosineSimilarity(a, b) {
+      let dot = 0, normA = 0, normB = 0;
+      for (let i = 0; i < a.length; i++) {
+        dot += a[i] * b[i];
+        normA += a[i] * a[i];
+        normB += b[i] * b[i];
+      }
+      return dot / (Math.sqrt(normA) * Math.sqrt(normB) + 1e-9);
+    }
+
+    function averageProfile(samples) {
+      const avg = new Float32Array(NUM_BINS);
+      for (const s of samples) {
+        for (let i = 0; i < NUM_BINS; i++) avg[i] += s[i];
+      }
+      for (let i = 0; i < NUM_BINS; i++) avg[i] /= samples.length;
+      return avg;
     }
 
     function updateRefStatus() {
-      const f = references.full ? '✓ saved' : '✗ not saved';
-      const e = references.empty ? '✓ saved' : '✗ not saved';
-      document.getElementById('ref-status').textContent = `Full reference: ${f}   |   Empty reference: ${e}`;
-      document.getElementById('log-trial').disabled = !(references.full && references.empty);
+      const f = refSamples.full.length;
+      const e = refSamples.empty.length;
+      const warn = (n) => n > 0 && n < 3 ? ' (3+ recommended)' : '';
+      document.getElementById('ref-status').textContent =
+        `Full: ${f} sample${f === 1 ? '' : 's'}${warn(f)}   |   Empty: ${e} sample${e === 1 ? '' : 's'}${warn(e)}`;
+      document.getElementById('log-trial').disabled = !(f >= 1 && e >= 1);
     }
 
     document.getElementById('capture').addEventListener('click', async () => {
@@ -202,21 +236,28 @@
       for (let i = 0; i < NUM_BINS; i++) accumulated[i] /= samples;
       lastProfile = accumulated;
 
-      log('Capture complete. Save as a reference (step 2) or log it as a trial (step 3).');
+      log('Capture complete. Add as a reference sample (step 2) or log it as a trial (step 3).');
     });
 
     document.getElementById('save-full').addEventListener('click', () => {
       if (!lastProfile) return log('Capture something first.');
-      references.full = lastProfile;
-      log('Saved current capture as reference: FULL');
+      refSamples.full.push(lastProfile);
+      log('Added Full sample #' + refSamples.full.length);
       updateRefStatus();
     });
 
     document.getElementById('save-empty').addEventListener('click', () => {
       if (!lastProfile) return log('Capture something first.');
-      references.empty = lastProfile;
-      log('Saved current capture as reference: EMPTY');
+      refSamples.empty.push(lastProfile);
+      log('Added Empty sample #' + refSamples.empty.length);
       updateRefStatus();
+    });
+
+    document.getElementById('reset-refs').addEventListener('click', () => {
+      refSamples.full = [];
+      refSamples.empty = [];
+      updateRefStatus();
+      log('References reset. Rebuild both classes before logging trials.');
     });
 
     document.getElementById('log-trial').addEventListener('click', () => {
@@ -225,10 +266,12 @@
       if (!actualEl) return log('Select whether this container is actually Full or Empty first.');
       const actual = actualEl.value;
 
-      const dFull = distance(lastProfile, references.full);
-      const dEmpty = distance(lastProfile, references.empty);
-      const predicted = dFull < dEmpty ? 'full' : 'empty';
-      const separation = Math.abs(dFull - dEmpty) / Math.max(dFull, dEmpty);
+      const refFull = averageProfile(refSamples.full);
+      const refEmpty = averageProfile(refSamples.empty);
+      const simFull = cosineSimilarity(lastProfile, refFull);
+      const simEmpty = cosineSimilarity(lastProfile, refEmpty);
+      const predicted = simFull > simEmpty ? 'full' : 'empty';
+      const separation = Math.abs(simFull - simEmpty); // 0-1ish, cosine sim range
       const correct = predicted === actual;
 
       trials.push({ n: trials.length + 1, predicted, actual, correct, separation });
@@ -279,7 +322,7 @@
       const accuracy = (correctCount / trials.length) * 100;
       const avgSep = (trials.reduce((s, t) => s + t.separation, 0) / trials.length) * 100;
       const summary =
-        `In ${trials.length} test trials on sealed water containers (mixed full/empty), ` +
+        `In ${trials.length} test trials on sealed containers (mixed full/empty), ` +
         `the on-device acoustic sweep correctly distinguished full vs. empty in ${correctCount}/${trials.length} trials ` +
         `(${accuracy.toFixed(0)}% accuracy), with an average separation confidence of ${avgSep.toFixed(0)}%.`;
 
