@@ -1,38 +1,30 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import { useState } from 'react';
-import { AppScreen, VerificationSession } from './types';
-import { DEFAULT_SESSION } from './data/mockData';
-import { PhoneFrame } from './components/PhoneFrame';
-import { ScreenSwitcher } from './components/ScreenSwitcher';
-import { NotificationModal } from './components/NotificationModal';
-import { ManualModal } from './components/ManualModal';
+import { useState } from "react";
+import { AppScreen, VerificationSession } from "./types";
+import { DEFAULT_SESSION } from "./data/mockData";
+import { NotificationModal } from "./components/NotificationModal";
+import { ManualModal } from "./components/ManualModal";
 
 // Screens
-import { HomeScreen } from './screens/HomeScreen';
-import { CaptureEvidenceScreen } from './screens/CaptureEvidenceScreen';
-import { RecordClaimScreen } from './screens/RecordClaimScreen';
-import { AcousticCheckScreen } from './screens/AcousticCheckScreen';
-import { ReviewEvidenceScreen } from './screens/ReviewEvidenceScreen';
-import { AnalysisScreen } from './screens/AnalysisScreen';
-import { ResultMatchScreen } from './screens/ResultMatchScreen';
-import { ResultMismatchScreen } from './screens/ResultMismatchScreen';
-import { ResultClarityScreen } from './screens/ResultClarityScreen';
-import { HistoryScreen } from './screens/HistoryScreen';
+import { HomeScreen } from "./screens/HomeScreen";
+import { CaptureEvidenceScreen } from "./screens/CaptureEvidenceScreen";
+import { RecordClaimScreen } from "./screens/RecordClaimScreen";
+import { AcousticCheckScreen } from "./screens/AcousticCheckScreen";
+import { ReviewEvidenceScreen } from "./screens/ReviewEvidenceScreen";
+import { AnalysisScreen } from "./screens/AnalysisScreen";
+import { ResultMatchScreen } from "./screens/ResultMatchScreen";
+import { ResultMismatchScreen } from "./screens/ResultMismatchScreen";
+import { ResultClarityScreen } from "./screens/ResultClarityScreen";
+import { HistoryScreen } from "./screens/HistoryScreen";
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState<AppScreen>('home');
-  const [isFramed, setIsFramed] = useState<boolean>(false);
+  const [currentScreen, setCurrentScreen] = useState<AppScreen>("home");
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isManualOpen, setIsManualOpen] = useState(false);
   const [session, setSession] = useState<VerificationSession>(DEFAULT_SESSION);
 
   const renderActiveScreen = () => {
     switch (currentScreen) {
-      case 'home':
+      case "home":
         return (
           <HomeScreen
             onNavigate={setCurrentScreen}
@@ -42,7 +34,7 @@ export default function App() {
             setSession={setSession}
           />
         );
-      case 'capture':
+      case "capture":
         return (
           <CaptureEvidenceScreen
             onNavigate={setCurrentScreen}
@@ -50,7 +42,7 @@ export default function App() {
             setSession={setSession}
           />
         );
-      case 'record-claim':
+      case "record-claim":
         return (
           <RecordClaimScreen
             onNavigate={setCurrentScreen}
@@ -58,7 +50,7 @@ export default function App() {
             setSession={setSession}
           />
         );
-      case 'acoustic-check':
+      case "acoustic-check":
         return (
           <AcousticCheckScreen
             onNavigate={setCurrentScreen}
@@ -67,7 +59,7 @@ export default function App() {
             setSession={setSession}
           />
         );
-      case 'review-evidence':
+      case "review-evidence":
         return (
           <ReviewEvidenceScreen
             onNavigate={setCurrentScreen}
@@ -76,14 +68,14 @@ export default function App() {
             setSession={setSession}
           />
         );
-      case 'ai-analysis':
+      case "ai-analysis":
         return (
           <AnalysisScreen
             onNavigate={setCurrentScreen}
             session={session}
           />
         );
-      case 'result-match':
+      case "result-match":
         return (
           <ResultMatchScreen
             onNavigate={setCurrentScreen}
@@ -91,13 +83,13 @@ export default function App() {
             session={session}
           />
         );
-      case 'result-mismatch':
+      case "result-mismatch":
         return (
           <ResultMismatchScreen
             onNavigate={setCurrentScreen}
           />
         );
-      case 'result-clarity':
+      case "result-clarity":
         return (
           <ResultClarityScreen
             onNavigate={setCurrentScreen}
@@ -105,7 +97,7 @@ export default function App() {
             onOpenManual={() => setIsManualOpen(true)}
           />
         );
-      case 'history':
+      case "history":
         return (
           <HistoryScreen
             onNavigate={setCurrentScreen}
@@ -128,19 +120,6 @@ export default function App() {
 
   return (
     <main className="relative min-h-screen font-sans bg-slate-100">
-      {/* Quick Screen Switcher Toolbar */}
-      <ScreenSwitcher
-        currentScreen={currentScreen}
-        onSelectScreen={setCurrentScreen}
-        isFramed={isFramed}
-        onToggleFrame={() => setIsFramed(!isFramed)}
-      />
-
-      {/* Mobile Shell Presentation */}
-      <PhoneFrame isFramed={isFramed}>
-        {renderActiveScreen()}
-      </PhoneFrame>
-
       {/* Global Modals */}
       <NotificationModal
         isOpen={isNotificationOpen}
@@ -151,7 +130,8 @@ export default function App() {
         isOpen={isManualOpen}
         onClose={() => setIsManualOpen(false)}
       />
+
+      {renderActiveScreen()}
     </main>
   );
 }
-
