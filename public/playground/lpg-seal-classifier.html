@@ -1,0 +1,275 @@
+<!doctype html>
+<!--
+  LOCAL DATASET TRAINER — not part of the production app.
+  Use reviewed, locally stored images to teach a lightweight classifier the
+  visual distinction between a clearly visible seal and a missing/unclear
+  seal. It does not upload images anywhere. Keep test images separate from
+  the training folders so the validation score is meaningful.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GroundTruth seal classifier trainer</title>
+  <style>
+    :root { --deep:#053b3e; --teal:#028090; --mint:#02c39a; --bg:#f2f8f7; --line:#d8e4e2; --text:#12262a; --muted:#5a6b6c; --red:#c0392b; }
+    * { box-sizing:border-box; } body { max-width:800px; margin:36px auto; padding:0 16px 48px; color:var(--text); background:#fff; font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; }
+    h1,h2 { color:var(--deep); } h1 { margin-bottom:4px; } h2 { margin:0 0 10px; font-size:17px; } p { margin:7px 0; } a { color:var(--teal); }
+    .notice { border-left:4px solid var(--teal); background:#edf8f6; padding:12px 14px; border-radius:0 10px 10px 0; color:#24595a; }
+    section { border:1px solid var(--line); border-radius:12px; padding:16px; margin-top:18px; } .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; } @media(max-width:560px){.grid{grid-template-columns:1fr}}
+    .file-card { border:1px dashed #9dcac5; padding:13px; border-radius:10px; background:var(--bg); } .file-card strong { display:block; color:var(--deep); margin-bottom:3px; }
+    input[type=file] { width:100%; margin-top:9px; } button { padding:10px 14px; margin:5px 7px 0 0; border:1px solid #0b717b; border-radius:8px; color:#fff; background:var(--teal); font:inherit; font-weight:700; cursor:pointer; } button.secondary { color:var(--deep); background:#fff; border-color:#a9c9c5; } button:disabled { opacity:.45; cursor:not-allowed; }
+    #status,#log,#prediction,#validation { margin-top:12px; padding:12px; border-radius:9px; background:var(--bg); white-space:pre-wrap; overflow-wrap:anywhere; } #log { min-height:64px; font:12px/1.45 ui-monospace,Consolas,monospace; } #prediction { display:none; font-size:16px; font-weight:700; } .good { color:#087c60; } .warn { color:#9b5a00; } .bad { color:var(--red); } .counts { margin-top:10px; color:var(--muted); font-size:13px; }
+    #camera-wrap { display:none; position:relative; max-width:440px; margin-top:14px; overflow:hidden; border-radius:12px; background:var(--deep); } #camera-video,#camera-frame { display:block; width:100%; } #camera-frame { display:none; } .camera-label { position:absolute; left:12px; right:12px; bottom:12px; padding:8px 10px; border-radius:8px; color:#063b3b; background:#a8f0df; text-align:center; font-size:12px; font-weight:800; }
+  </style>
+</head>
+<body>
+  <p><a href="./">← All playgrounds</a></p>
+  <h1>LPG seal visibility classifier</h1>
+  <p>Train a small, on-device classifier from your reviewed local images, then test a new uploaded photo. This is a visual decision-support prototype—not a safety certificate.</p>
+  <div class="notice"><strong>Keep the sets separate.</strong> Training images teach the classifier. Validation images measure it. Never use the same photo in both sets, and do not call an ambiguous image “sealed.”</div>
+
+  <section>
+    <h2>1. Add reviewed image sets</h2>
+    <div class="grid">
+      <label class="file-card"><strong>Training: seal visibly present</strong><span>Close-ups where the cap/seal area is clearly visible.</span><input id="train-visible" type="file" accept="image/*" multiple /></label>
+      <label class="file-card"><strong>Training: seal missing or unclear</strong><span>Missing, obscured, damaged-looking, or intentionally difficult seal areas.</span><input id="train-unclear" type="file" accept="image/*" multiple /></label>
+      <label class="file-card"><strong>Validation: seal visibly present</strong><span>Held-out images—never included in training.</span><input id="test-visible" type="file" accept="image/*" multiple /></label>
+      <label class="file-card"><strong>Validation: seal missing or unclear</strong><span>Held-out images—never included in training.</span><input id="test-unclear" type="file" accept="image/*" multiple /></label>
+    </div>
+    <div class="counts" id="counts">Select at least 10 varied training images for each class before training.</div>
+    <button id="train">Load MobileNet &amp; train locally</button>
+    <button id="validate" class="secondary" disabled>Validate held-out images</button>
+    <div id="status">No model loaded.</div>
+    <div id="validation" style="display:none"></div>
+  </section>
+
+  <section>
+    <h2>2. Test a new cylinder photo</h2>
+    <p>Use a new camera frame or an uploaded image the classifier did not train on. The result stays in this browser.</p>
+    <button id="start-camera" class="secondary" disabled>Start camera</button>
+    <button id="capture-camera" disabled>Capture &amp; classify</button>
+    <button id="stop-camera" class="secondary" disabled>Stop camera</button>
+    <div id="camera-wrap"><video id="camera-video" autoplay playsinline muted></video><canvas id="camera-frame"></canvas><div class="camera-label">Frame the cylinder’s top and seal area</div></div>
+    <p style="margin-top:14px;color:var(--muted);font-size:13px">Or select a photo:</p>
+    <input id="predict-file" type="file" accept="image/*" disabled />
+    <button id="predict" disabled>Classify uploaded image</button>
+    <div id="prediction"></div>
+  </section>
+
+  <section>
+    <h2>3. Save or restore the trained classifier</h2>
+    <p>Export after training to reuse the same classifier later on this device. The export contains learned feature examples, not the original photos.</p>
+    <button id="export" class="secondary" disabled>Export classifier</button>
+    <label class="file-card" style="display:inline-block;margin-top:10px"><strong>Import classifier JSON</strong><input id="import" type="file" accept="application/json" /></label>
+  </section>
+
+  <div id="log">Idle. Add local image sets, then train.</div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier@1.2.6/dist/knn-classifier.min.js"></script>
+  <script>
+    (() => {
+      const VISIBLE = 'seal_visibly_present';
+      const UNCLEAR = 'seal_missing_or_unclear';
+      // KNN confidence is a neighbour-vote share, not a calibrated model
+      // probability. Require 80% agreement before returning a positive
+      // sealed/unsealed label; otherwise surface the honest "Unclear" state.
+      const threshold = 0.80;
+      let featureModel = null;
+      let classifier = null;
+      let cameraStream = null;
+      const byId = (id) => document.getElementById(id);
+      const log = (message) => { byId('log').textContent += '\n' + message; console.log(message); };
+      const files = (id) => [...byId(id).files].filter((file) => file.type.startsWith('image/'));
+
+      ['train-visible','train-unclear','test-visible','test-unclear'].forEach((id) => byId(id).addEventListener('change', updateCounts));
+      byId('train').addEventListener('click', train);
+      byId('validate').addEventListener('click', validate);
+      byId('predict').addEventListener('click', predictUpload);
+      byId('start-camera').addEventListener('click', startCamera);
+      byId('capture-camera').addEventListener('click', captureCamera);
+      byId('stop-camera').addEventListener('click', stopCamera);
+      byId('export').addEventListener('click', exportClassifier);
+      byId('import').addEventListener('change', importClassifier);
+
+      function updateCounts() {
+        byId('counts').textContent = `Training: ${files('train-visible').length} visible, ${files('train-unclear').length} unclear. Validation: ${files('test-visible').length} visible, ${files('test-unclear').length} unclear.`;
+      }
+
+      async function ensureModel() {
+        if (featureModel) return;
+        byId('status').textContent = 'Loading MobileNet feature extractor (first run downloads it)…';
+        log('Loading MobileNet v2 feature extractor…');
+        try { await tf.setBackend('webgl'); } catch {}
+        await tf.ready();
+        featureModel = await mobilenet.load({ version: 2, alpha: 0.50 });
+        log('MobileNet ready on TensorFlow.js backend: ' + tf.getBackend() + '.');
+      }
+
+      async function train() {
+        const visible = files('train-visible');
+        const unclear = files('train-unclear');
+        if (visible.length < 5 || unclear.length < 5) {
+          byId('status').textContent = 'Add at least five varied images to each training class first. More diversity is better than duplicate copies.';
+          return;
+        }
+        setBusy(true);
+        try {
+          await ensureModel();
+          if (classifier) classifier.dispose();
+          classifier = knnClassifier.create();
+          await addExamples(visible, VISIBLE);
+          await addExamples(unclear, UNCLEAR);
+          const counts = classifier.getClassExampleCount();
+          byId('status').textContent = `Classifier trained locally: ${counts[VISIBLE] || 0} visible-seal examples, ${counts[UNCLEAR] || 0} missing/unclear examples. It requires 80% nearest-neighbour agreement to return a label.`;
+          byId('validate').disabled = false;
+          byId('predict-file').disabled = false;
+          byId('predict').disabled = false;
+          byId('start-camera').disabled = false;
+          byId('export').disabled = false;
+          log('Training complete. Test only with held-out images.');
+        } catch (error) {
+          byId('status').textContent = 'Training failed: ' + (error?.message || error);
+          log('ERROR training: ' + (error?.message || error));
+        } finally { setBusy(false); }
+      }
+
+      async function addExamples(imageFiles, label) {
+        for (let index = 0; index < imageFiles.length; index += 1) {
+          byId('status').textContent = `Training ${label.replaceAll('_', ' ')}: ${index + 1}/${imageFiles.length}…`;
+          const image = await fileToImage(imageFiles[index]);
+          const embedding = featureModel.infer(image, true);
+          classifier.addExample(embedding, label);
+          embedding.dispose();
+        }
+      }
+
+      async function validate() {
+        if (!classifier) return;
+        const groups = [[files('test-visible'), VISIBLE], [files('test-unclear'), UNCLEAR]];
+        const total = groups.reduce((sum, [list]) => sum + list.length, 0);
+        if (!total) { byId('validation').style.display = 'block'; byId('validation').textContent = 'Add held-out validation images to measure accuracy.'; return; }
+        setBusy(true);
+        let correct = 0; let checked = 0;
+        try {
+          for (const [list, expected] of groups) for (const file of list) {
+            const result = await classifyImage(await fileToImage(file));
+            checked += 1; if (result.label === expected) correct += 1;
+          }
+          const accuracy = correct / checked;
+          const output = byId('validation'); output.style.display = 'block';
+          output.innerHTML = `<strong class="${accuracy >= .7 ? 'good' : 'warn'}">Held-out validation: ${correct}/${checked} correct (${Math.round(accuracy * 100)}%).</strong><br>Only use this number with the stated held-out images; it is not a real-world safety guarantee.`;
+          log(`Validation complete: ${correct}/${checked} correct.`);
+        } catch (error) { log('ERROR validating: ' + (error?.message || error)); }
+        finally { setBusy(false); }
+      }
+
+      async function predictUpload() {
+        const file = files('predict-file')[0];
+        if (!file || !classifier) return;
+        setBusy(true);
+        try {
+          const result = await classifyImage(await fileToImage(file));
+          showPrediction(result, 'Uploaded image');
+        } catch (error) { log('ERROR classifying upload: ' + (error?.message || error)); }
+        finally { setBusy(false); }
+      }
+
+      async function startCamera() {
+        if (!classifier) return;
+        try {
+          if (!navigator.mediaDevices?.getUserMedia) throw new Error('Camera access is not supported in this browser.');
+          cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+          const video = byId('camera-video');
+          video.srcObject = cameraStream;
+          await video.play();
+          byId('camera-wrap').style.display = 'block';
+          byId('camera-frame').style.display = 'none';
+          byId('capture-camera').disabled = false;
+          byId('stop-camera').disabled = false;
+          byId('start-camera').disabled = true;
+          log('Camera ready. Frame the cylinder top and seal, then capture and classify.');
+        } catch (error) { log('ERROR starting camera: ' + (error?.message || error)); }
+      }
+
+      async function captureCamera() {
+        const video = byId('camera-video');
+        if (!classifier || !video.videoWidth) return;
+        setBusy(true);
+        try {
+          const canvas = byId('camera-frame');
+          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+          canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+          canvas.style.display = 'block';
+          const result = await classifyImage(canvas);
+          showPrediction(result, 'Camera frame');
+        } catch (error) { log('ERROR classifying camera frame: ' + (error?.message || error)); }
+        finally { setBusy(false); byId('capture-camera').disabled = !cameraStream; }
+      }
+
+      function showPrediction(result, source) {
+        const confidence = result.confidences[result.label] || 0;
+        const output = byId('prediction'); output.style.display = 'block';
+        const voteNote = `Nearest-neighbour agreement: ${Math.round(confidence * 100)}% (${result.k} comparison examples).`;
+        if (confidence < threshold) {
+          output.className = 'warn'; output.textContent = `Unclear — the training examples disagree. Retake or review the image. ${voteNote}`;
+        } else if (result.label === VISIBLE) {
+          output.className = 'good'; output.textContent = `Seal visibly present. ${voteNote}`;
+        } else {
+          output.className = 'bad'; output.textContent = `Seal missing or unclear. ${voteNote}`;
+        }
+        log(source + ' classified as ' + result.label + ' (' + Math.round(confidence * 100) + '%).');
+      }
+
+      async function classifyImage(image) {
+        const embedding = featureModel.infer(image, true);
+        const counts = classifier.getClassExampleCount();
+        // Avoid the old fixed k=3 behaviour where every close decision
+        // appeared as 67%. With five or more images per class, compare a
+        // broader, odd number of neighbours (up to seven).
+        const smallestClass = Math.min(counts[VISIBLE] || 0, counts[UNCLEAR] || 0);
+        let k = Math.min(7, smallestClass);
+        if (k % 2 === 0) k -= 1;
+        k = Math.max(3, k);
+        const result = await classifier.predictClass(embedding, k);
+        embedding.dispose();
+        return { ...result, k };
+      }
+
+      async function exportClassifier() {
+        if (!classifier) return;
+        const serialized = {};
+        const dataset = classifier.getClassifierDataset();
+        for (const [label, tensor] of Object.entries(dataset)) serialized[label] = { values: Array.from(tensor.dataSync()), shape: tensor.shape };
+        const blob = new Blob([JSON.stringify({ version: 1, labels: [VISIBLE, UNCLEAR], dataset: serialized })], { type: 'application/json' });
+        const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'groundtruth-seal-classifier.json'; link.click(); URL.revokeObjectURL(link.href);
+        log('Classifier exported. Keep the JSON file with your prepared demo assets.');
+      }
+
+      async function importClassifier(event) {
+        const file = event.target.files[0]; if (!file) return;
+        setBusy(true);
+        try {
+          await ensureModel();
+          const parsed = JSON.parse(await file.text());
+          if (!parsed.dataset?.[VISIBLE] || !parsed.dataset?.[UNCLEAR]) throw new Error('This file is not a GroundTruth seal-classifier export.');
+          if (classifier) classifier.dispose(); classifier = knnClassifier.create();
+          const restored = Object.fromEntries(Object.entries(parsed.dataset).map(([label, item]) => [label, tf.tensor(item.values, item.shape)]));
+          classifier.setClassifierDataset(restored);
+          byId('status').textContent = 'Classifier restored locally and ready to test uploads.';
+          byId('validate').disabled = false; byId('predict-file').disabled = false; byId('predict').disabled = false; byId('start-camera').disabled = false; byId('export').disabled = false;
+          log('Classifier imported successfully.');
+        } catch (error) { byId('status').textContent = 'Import failed: ' + (error?.message || error); log('ERROR importing: ' + (error?.message || error)); }
+        finally { setBusy(false); }
+      }
+
+      function fileToImage(file) { return new Promise((resolve, reject) => { const image = new Image(); const url = URL.createObjectURL(file); image.onload = () => { URL.revokeObjectURL(url); resolve(image); }; image.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read ' + file.name)); }; image.src = url; }); }
+      function stopCamera() { if (cameraStream) cameraStream.getTracks().forEach((track) => track.stop()); cameraStream = null; byId('camera-video').srcObject = null; byId('capture-camera').disabled = true; byId('stop-camera').disabled = true; byId('start-camera').disabled = !classifier; log('Camera stopped.'); }
+      window.addEventListener('pagehide', stopCamera);
+      function setBusy(busy) { ['train','validate','predict','export'].forEach((id) => { if (id === 'validate' && !classifier) return; byId(id).disabled = busy || (id !== 'train' && !classifier); }); }
+    })();
+  </script>
+</body>
+</html>

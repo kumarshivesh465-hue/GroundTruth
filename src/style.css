@@ -78,6 +78,27 @@ html, body {
   letter-spacing: 0.2px;
   white-space: nowrap;
 }
+.header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.playground-link {
+  color: #cfefea;
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid rgba(207, 239, 234, 0.45);
+  border-radius: 999px;
+  padding: 5px 8px;
+  line-height: 1;
+}
+.playground-link:hover,
+.playground-link:focus-visible {
+  color: #053b3e;
+  background: #cfefea;
+}
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -349,6 +370,13 @@ html, body {
 
 .liquid-button:hover { transform: scale(1.05); }
 .liquid-button:active { transform: scale(0.97); }
+.liquid-button:disabled { opacity: .48; cursor: not-allowed; transform: none; }
+.action-button { width: 100%; min-height: 48px; padding: 12px 16px; border: 0; border-radius: 12px; color: #fff; background: var(--primary); box-shadow: var(--shadow-sm); font: 700 14px var(--font-body); cursor: pointer; }
+.action-button:hover { background: #016e7d; }
+.action-button:active { transform: translateY(1px); }
+.action-button.secondary { color: var(--primary); background: var(--surface); border: 1px solid #a9cfca; box-shadow: none; }
+.action-button.warning { color: #fff; background: var(--danger); }
+.action-button:disabled { opacity: .5; cursor: not-allowed; }
 .liquid-button:hover .liquid { animation: liquid-hover 5s infinite; }
 
 @keyframes liquid-hover {
@@ -363,12 +391,16 @@ html, body {
 
 #camera-video {
   width: 100%;
+  max-height: 300px;
   border-radius: 16px;
   background: #000;
-  aspect-ratio: 3 / 4;
+  aspect-ratio: 4 / 3;
   object-fit: cover;
   box-shadow: var(--shadow-md);
 }
+.captured-preview { display: block; width: 100%; border-radius: 16px; box-shadow: var(--shadow-sm); }
+.claim-input { display: block; width: 100%; resize: vertical; margin-top: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; color: var(--text); background: var(--surface-muted); font: inherit; line-height: 1.45; }
+.form-hint { margin: 9px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
 
 /* ---------------------------------------------------------------------
    Bottom tab bar
@@ -413,6 +445,13 @@ html, body {
   .step-card { padding: 14px; gap: 11px; }
   .icon-chip { width: 38px; height: 38px; }
   .liquid-button { padding: 12px 18px; font-size: 13px; }
+}
+
+@media (max-height: 700px) {
+  .topbar { padding-top: 11px; padding-bottom: 11px; }
+  #screen-outlet { padding-top: 16px; padding-bottom: 16px; }
+  #camera-video { max-height: 220px; }
+  .step-card { padding: 13px; margin-bottom: 10px; }
 }
 
 /* Respect reduced-motion preferences \u2014 the liquid button's ambient

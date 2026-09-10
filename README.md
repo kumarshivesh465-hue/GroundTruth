@@ -6,7 +6,7 @@
 
 An offline-first Progressive Web App that independently verifies field-delivery claims — catching LPG cylinder under-filling and tampering in seconds, entirely on-device, with zero connectivity required.
 
-[**Live Demo**](https://splendorous-sable-b083e5.netlify.app/)
+[**Live Demo**](https://6a89e05ae350dfd664c35636--splendorous-sable-b083e5.netlify.app/)
 
 </div>
 
@@ -23,6 +23,7 @@ An offline-first Progressive Web App that independently verifies field-delivery 
 - [Testing & Validation](#testing--validation)
 - [Project Structure](#project-structure)
 - [FAQ](#faq)
+- [Team](#team)
 - [Acknowledgments](#acknowledgments)
 - [License](#license)
 
@@ -77,7 +78,7 @@ Every step above runs **client-side, in the browser** — no backend, no network
 | Layer | Technology | Why |
 |---|---|---|
 | App shell | [Vite](https://vitejs.dev/) + [vite-plugin-pwa](https://vite-pwa-org.netlify.app/) | Installable, offline-capable PWA with zero native build tooling |
-| Vision | [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe) — Object Detector | Pretrained, on-device, no training data needed |
+| Vision | [TensorFlow.js](https://www.tensorflow.org/js) + COCO-SSD MobileNet v2 | Current on-device general object-in-frame signal; MediaPipe remains available only as a comparison playground |
 | Speech | Web Speech API / [transformers.js](https://huggingface.co/docs/transformers.js) (Whisper) | Fast MVP path or fully-local alternative |
 | Acoustic sensing | Web Audio API — tone sweep + FFT analysis | No native audio APIs required, works in any modern browser |
 | Reasoning | [WebLLM](https://webllm.mlc.ai/) — `Qwen2.5-1.5B-Instruct`, on-device via WebGPU | Genuine local LLM inference, not a cloud API call |
@@ -126,7 +127,9 @@ Each stage of the pipeline has a **standalone, working test page** under `/playg
 | Playground | Validates | What it does |
 |---|---|---|
 | `webllm-test.html` | Reasoning | Loads a quantized LLM fully in-browser via WebGPU and runs a test reconciliation prompt |
-| `mediapipe-test.html` | Vision | Freeze-frame object detection with trial logging — computes a real detection-reliability % |
+| `tfjs-coco-ssd-test.html` | Vision | TensorFlow.js COCO-SSD MobileNet v2 freeze-frame detection with trial logging, confidence, and inference timing |
+| `lpg-seal-classifier.html` | Custom vision training | On-device MobileNet + KNN training from locally reviewed seal images, held-out validation, and uploaded-image testing |
+| `mediapipe-test.html` | Legacy vision comparison | Freeze-frame MediaPipe object detection retained for side-by-side test results |
 | `whisper-test.html` | Speech | Fully on-device transcription via transformers.js, with accuracy trial logging |
 | `acoustic-test.html` | Acoustic sensing | Plays a tone sweep, records the response, and computes real full/empty separation accuracy against saved reference containers |
 
@@ -144,8 +147,10 @@ groundtruth-starter/
 │   ├── receipt.js             # Verdict receipt generation + share/export
 │   └── style.css              # Design tokens, Trust Ring, responsive layout
 ├── playground/
+│   ├── index.html             # Directory of device-ready validation checks
 │   ├── webllm-test.html       # LLM reasoning validation
 │   ├── mediapipe-test.html    # Vision detection validation
+│   ├── tfjs-coco-ssd-test.html # TensorFlow.js vision comparison
 │   ├── whisper-test.html      # Speech-to-text validation
 │   └── acoustic-test.html     # Acoustic sensing validation
 └── public/
@@ -191,6 +196,10 @@ Built with [Vite](https://vitejs.dev/), [MediaPipe](https://ai.google.dev/edge/m
 
 Implementation patterns validated against Google's [mediapipe-samples-web](https://github.com/google-ai-edge/mediapipe-samples-web) and Xenova's [whisper-web](https://github.com/xenova/whisper-web) reference apps. The acoustic-sensing approach independently confirms the same principle documented in the academic toolkit [LibAcousticSensing](https://github.com/yctung/LibAcousticSensing) — implemented from scratch here via the Web Audio API, since that toolkit requires a native app and a networked MATLAB server, incompatible with an offline, in-browser PWA.
 
+## Team
+
+Built by **Shivesh Kumar** and **Madalam Sai Jeevan**.
+
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

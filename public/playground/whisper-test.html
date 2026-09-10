@@ -92,6 +92,12 @@
     const logEl = document.getElementById('log');
     const log = (msg) => { logEl.textContent += '\n' + msg; console.log(msg); };
 
+    // Pin the stable 3.x runtime. The previously unpinned CDN import could
+    // resolve to a newer runtime whose default WASM q8 Whisper export fails
+    // session creation with "TransposeDQWeightsForMatMulNBits".
+    const TRANSFORMERS_URL = 'https://esm.sh/@huggingface/transformers@3.8.1?bundle';
+    const WHISPER_MODEL = 'onnx-community/whisper-tiny.en';
+
     let transcriber = null;
     let mediaRecorder = null;
     let recordedChunks = [];
@@ -100,24 +106,58 @@
     const trials = [];
 
     document.getElementById('load-model').addEventListener('click', async () => {
-      document.getElementById('model-status').textContent = 'Loading (first run downloads the model, then it\'s cached offline)...';
-      log('Importing transformers.js from CDN...');
+      const loadButton = document.getElementById('load-model');
+      const status = document.getElementById('model-status');
+      loadButton.disabled = true;
+      status.textContent = 'Loading (first run downloads the model, then it\'s cached offline)...';
+      log('Importing pinned Transformers.js 3.8.1 from CDN...');
 
-      const { pipeline } = await import('https://esm.run/@huggingface/transformers');
+      const progress_callback = (p) => {
+        if (p.status === 'progress') {
+          status.textContent = `Loading: ${p.file} (${Math.round(p.progress || 0)}%)`;
+        }
+      };
 
-      // Small English-only model for a fast first test. Swap to the
-      // multilingual 'Xenova/whisper-tiny' if you need Tamil/Hindi claims.
-      transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en', {
-        progress_callback: (p) => {
-          if (p.status === 'progress') {
-            document.getElementById('model-status').textContent = `Loading: ${p.file} (${Math.round(p.progress || 0)}%)`;
+      try {
+        const { pipeline } = await import(TRANSFORMERS_URL);
+
+        if (navigator.gpu) {
+          try {
+            status.textContent = 'Loading Whisper on WebGPU…';
+            log('WebGPU available — loading the current Whisper Tiny English export on GPU.');
+            transcriber = await pipeline('automatic-speech-recognition', WHISPER_MODEL, {
+              device: 'webgpu',
+              progress_callback,
+            });
+          } catch (webGpuError) {
+            log('WebGPU loading failed (' + (webGpuError?.message || webGpuError) + '). Falling back to compatible WASM FP32.');
           }
-        },
-      });
+        }
 
-      document.getElementById('model-status').textContent = 'Model loaded and cached.';
-      document.getElementById('record').disabled = false;
-      log('Model ready. Tap Record and say a test claim out loud.');
+        if (!transcriber) {
+          // Do not use the default WASM q8 variant: that is the variant that
+          // triggers the Missing required scale / MatMulNBits error on the
+          // current ONNX Runtime path. FP32 is larger on first load, but it
+          // avoids the broken quantized graph and is cached afterwards.
+          status.textContent = 'Loading Whisper in compatible mode…';
+          log('Loading Whisper with WASM FP32 compatibility fallback.');
+          transcriber = await pipeline('automatic-speech-recognition', WHISPER_MODEL, {
+            device: 'wasm',
+            dtype: 'fp32',
+            progress_callback,
+          });
+        }
+
+        status.textContent = 'Model loaded and cached.';
+        document.getElementById('record').disabled = false;
+        log('Model ready. Tap Record and say a test claim out loud.');
+      } catch (error) {
+        transcriber = null;
+        status.textContent = 'Model could not load. Try again on HTTPS or localhost.';
+        log('ERROR loading model: ' + (error?.message || error));
+      } finally {
+        loadButton.disabled = false;
+      }
     });
 
     document.getElementById('record').addEventListener('click', async () => {

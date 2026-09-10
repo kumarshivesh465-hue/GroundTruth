@@ -1,0 +1,363 @@
+<!doctype html>
+<!--
+  STANDALONE LEARNING SCRIPT — not part of the app.
+  Compares TensorFlow.js COCO-SSD with the MediaPipe playground on the same
+  bottle, cup, and bowl test objects. It deliberately detects only the
+  frozen frame: one `model.detect(frame)` call per trial, which mirrors the
+  real Capture screen and makes timing comparable to MediaPipe IMAGE mode.
+
+  Method:
+    1. Tap "Start camera + load model" (the first run downloads the model).
+    2. Point at a test object and tap "Freeze & Detect".
+    3. Mark whether the label and box are useful, then log the trial.
+    4. Run 10+ trials across objects, angles, and lighting.
+    5. Copy the generated summary for the comparison notes or pitch deck.
+
+  COCO-SSD is trained on the same COCO-style general object categories as
+  MediaPipe's models. A copper bottle may still appear as cup, bottle, or
+  nothing — this page records the result instead of assuming it will work.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#053b3e" />
+  <title>TensorFlow.js COCO-SSD test | GroundTruth</title>
+  <style>
+    :root { color-scheme: light; }
+    body { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; max-width: 760px; margin: 40px auto; padding: 0 16px 40px; color: #12262a; }
+    h2 { color: #053b3e; }
+    p { line-height: 1.5; }
+    a { color: #028090; }
+    #wrap { position: relative; width: 100%; max-width: 480px; background: #e7f1ef; border-radius: 8px; overflow: hidden; }
+    video, canvas.overlay { display: block; width: 100%; border-radius: 8px; }
+    canvas.overlay { position: absolute; inset: 0; pointer-events: none; }
+    button { padding: 10px 16px; font: inherit; font-size: 14px; margin: 4px 6px 4px 0; cursor: pointer; border: 1px solid #0b717b; border-radius: 6px; background: #028090; color: white; }
+    button:hover:not(:disabled) { background: #016c79; }
+    button.secondary { background: white; color: #053b3e; border-color: #9bbfbb; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    section { border: 1px solid #d8e4e2; border-radius: 8px; padding: 14px; margin-top: 18px; max-width: 700px; }
+    section h3 { margin-top: 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #e5eeed; vertical-align: top; }
+    .correct { color: #02875e; font-weight: bold; }
+    .wrong { color: #c0392b; font-weight: bold; }
+    .stat { display: inline-block; background: #f2f8f7; padding: 10px 16px; border-radius: 8px; margin: 4px 8px 4px 0; }
+    .stat b { display: block; font-size: 22px; color: #028090; }
+    #summary-out { white-space: pre-wrap; background: #053b3e; color: #cfefea; padding: 12px; border-radius: 8px; margin-top: 10px; font-size: 12.5px; }
+    #log { white-space: pre-wrap; overflow-wrap: anywhere; background: #f2f8f7; padding: 12px; border-radius: 8px; margin-top: 16px; min-height: 60px; max-width: 700px; }
+    #frozen-frame { display: none; max-width: 100%; max-height: 320px; margin-top: 8px; border-radius: 8px; border: 1px solid #d8e4e2; }
+    .hint { color: #5a6b6c; font-size: 13px; }
+    .error { color: #c0392b; font-weight: bold; }
+    .detection-list { margin: 8px 0 0; padding-left: 20px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <p><a href="./">← All playgrounds</a></p>
+  <h2>TensorFlow.js COCO-SSD object detector test</h2>
+  <p>Use the same objects as the MediaPipe test—especially copper bottle, standard bottle, cup, and bowl—to compare real freeze-frame results.</p>
+
+  <button id="start">Start camera + load model</button>
+  <span id="model-status" class="hint">Model not loaded.</span>
+  <div id="wrap">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="overlay" class="overlay"></canvas>
+  </div>
+
+  <section>
+    <h3>Log a trial (freeze-frame detection)</h3>
+    <p class="hint">The live view is intentionally camera-only. Each trial performs exactly one <code>model.detect(frozenCanvas)</code> call, then draws every returned box.</p>
+    <button id="freeze" disabled>Freeze &amp; Detect</button>
+    <button id="resume" class="secondary" disabled>Resume live view</button>
+    <canvas id="frozen-frame"></canvas>
+    <div id="snapshot-info" class="hint" style="margin:8px 0;">No frozen detection yet.</div>
+    <div id="detections" class="hint"></div>
+    <label><input type="radio" name="correct" value="yes" /> Detection was correct (right object, reasonable box)</label><br />
+    <label><input type="radio" name="correct" value="no" /> Detection was wrong or missing</label><br /><br />
+    <button id="log-trial" disabled>Log Trial</button>
+    <button id="clear-trials" class="secondary">Clear all trials</button>
+  </section>
+
+  <section id="results-section" style="display:none;">
+    <h3>Results</h3>
+    <div id="stats"></div>
+    <table>
+      <thead><tr><th>#</th><th>Top label</th><th>Confidence</th><th>Inference</th><th>Result</th></tr></thead>
+      <tbody id="trials-body"></tbody>
+    </table>
+    <button id="copy-summary">Copy results summary for the deck</button>
+    <div id="summary-out" style="display:none;"></div>
+  </section>
+
+  <div id="log">Idle. Tap "Start camera + load model" to begin.</div>
+
+  <!-- The official script-tag integration exposes `tf` then `cocoSsd` globally. -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+  <script>
+    (() => {
+      const video = document.getElementById('video');
+      const overlay = document.getElementById('overlay');
+      const overlayCtx = overlay.getContext('2d');
+      const frozenCanvas = document.getElementById('frozen-frame');
+      const frozenCtx = frozenCanvas.getContext('2d');
+      const logEl = document.getElementById('log');
+      const modelStatus = document.getElementById('model-status');
+      const log = (message) => {
+        logEl.textContent += '\n' + message;
+        console.log(message);
+      };
+      const showError = (message) => {
+        logEl.innerHTML += '\n<span class="error">ERROR: ' + escapeHtml(message) + '</span>';
+        console.error(message);
+      };
+
+      let model = null;
+      let stream = null;
+      let frozenSnapshot = null;
+      const trials = [];
+
+      document.getElementById('start').addEventListener('click', startCameraAndModel);
+      document.getElementById('freeze').addEventListener('click', freezeAndDetect);
+      document.getElementById('resume').addEventListener('click', resumeLiveView);
+      document.getElementById('log-trial').addEventListener('click', logTrial);
+      document.getElementById('clear-trials').addEventListener('click', clearTrials);
+      document.getElementById('copy-summary').addEventListener('click', copySummary);
+      window.addEventListener('pagehide', stopCamera);
+
+      async function startCameraAndModel() {
+        const startButton = document.getElementById('start');
+        startButton.disabled = true;
+
+        try {
+          if (!navigator.mediaDevices?.getUserMedia) {
+            throw new Error('This browser does not provide camera access (getUserMedia).');
+          }
+          if (!window.tf || !window.cocoSsd) {
+            throw new Error('TensorFlow.js scripts did not load. Check the network on this first setup run, then reload.');
+          }
+
+          if (!stream) {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: { ideal: 'environment' } },
+              audio: false,
+            });
+            video.srcObject = stream;
+            await video.play();
+            resizeOverlay();
+          }
+
+          if (!model) {
+            modelStatus.textContent = 'Loading COCO-SSD MobileNet v2 (first run downloads the model)…';
+            log('Loading TensorFlow.js COCO-SSD MobileNet v2…');
+            const modelStart = performance.now();
+            model = await cocoSsd.load({ base: 'mobilenet_v2' });
+            const loadMs = performance.now() - modelStart;
+            modelStatus.textContent = 'Model loaded in ' + formatMs(loadMs) + '. Ready for freeze-frame detection.';
+            log('Model loaded in ' + formatMs(loadMs) + '. Backend: ' + (tf.getBackend?.() || 'unknown') + '.');
+          } else {
+            modelStatus.textContent = 'Model already loaded. Ready for freeze-frame detection.';
+            log('Camera restarted; using the already-loaded COCO-SSD MobileNet v2 model.');
+          }
+
+          document.getElementById('freeze').disabled = false;
+        } catch (error) {
+          showError(error?.message || String(error));
+          log('Check camera permission and use HTTPS or localhost. The first model load also needs a connection.');
+          stopCamera();
+          startButton.disabled = false;
+        }
+      }
+
+      async function freezeAndDetect() {
+        if (!model || !stream) {
+          return log('Start the camera and load the model first.');
+        }
+        if (!video.videoWidth || !video.videoHeight) {
+          return log('The camera has not produced a frame yet. Wait a moment and try again.');
+        }
+
+        const freezeButton = document.getElementById('freeze');
+        freezeButton.disabled = true;
+        document.getElementById('resume').disabled = true;
+        frozenSnapshot = null;
+
+        try {
+          frozenCanvas.width = video.videoWidth;
+          frozenCanvas.height = video.videoHeight;
+          frozenCtx.drawImage(video, 0, 0, frozenCanvas.width, frozenCanvas.height);
+          frozenCanvas.style.display = 'block';
+
+          log('Running one model.detect() call on the frozen frame…');
+          const inferenceStart = performance.now();
+          const detections = await model.detect(frozenCanvas, 20, 0.25);
+          const inferenceMs = performance.now() - inferenceStart;
+          drawDetections(frozenCtx, detections);
+
+          const top = detections.reduce((best, detection) => !best || detection.score > best.score ? detection : best, null);
+          frozenSnapshot = {
+            label: top?.class || 'none',
+            score: top?.score || 0,
+            inferenceMs,
+            count: detections.length,
+          };
+          showDetectionList(detections);
+
+          if (detections.length === 0) {
+            log('No detections at the 25% confidence threshold (' + formatMs(inferenceMs) + ').');
+          } else {
+            log('Inference completed in ' + formatMs(inferenceMs) + '. ' + detections.length + ' detection(s):');
+            detections.forEach((detection, index) => {
+              log('  Detection ' + (index + 1) + ': ' + detection.class + ' at ' + percent(detection.score) + ' — box [' + detection.bbox.map((value) => Math.round(value)).join(', ') + ']');
+            });
+          }
+
+          document.getElementById('snapshot-info').textContent =
+            'Frozen COCO-SSD detection: "' + frozenSnapshot.label + '" at ' + percent(frozenSnapshot.score) +
+            ' confidence; ' + frozenSnapshot.count + ' candidate(s); inference ' + formatMs(inferenceMs) + '.';
+          document.getElementById('log-trial').disabled = false;
+          document.getElementById('resume').disabled = false;
+        } catch (error) {
+          showError('Detection failed: ' + (error?.message || String(error)));
+          document.getElementById('snapshot-info').textContent = 'Detection failed. See the log below.';
+        } finally {
+          freezeButton.disabled = !model || !stream;
+        }
+      }
+
+      function resumeLiveView() {
+        frozenCanvas.style.display = 'none';
+        overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+        document.getElementById('resume').disabled = true;
+        log('Live camera preview resumed.');
+      }
+
+      function drawDetections(ctx, detections) {
+        ctx.lineWidth = Math.max(2, frozenCanvas.width / 240);
+        ctx.font = Math.max(14, frozenCanvas.width / 28) + 'px ui-monospace, monospace';
+        detections.forEach((detection) => {
+          const [x, y, width, height] = detection.bbox;
+          const label = detection.class + ' ' + percent(detection.score);
+          ctx.strokeStyle = '#02c39a';
+          ctx.fillStyle = 'rgba(5, 59, 62, 0.86)';
+          ctx.strokeRect(x, y, width, height);
+          const textWidth = ctx.measureText(label).width;
+          const textHeight = parseInt(ctx.font, 10) + 8;
+          ctx.fillRect(x, Math.max(0, y - textHeight), textWidth + 10, textHeight);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(label, x + 5, Math.max(parseInt(ctx.font, 10), y - 6));
+        });
+      }
+
+      function showDetectionList(detections) {
+        const output = document.getElementById('detections');
+        if (!detections.length) {
+          output.textContent = 'All detections: none above the 25% confidence threshold.';
+          return;
+        }
+        output.innerHTML = '<strong>All detections:</strong><ol class="detection-list">' + detections.map((detection) =>
+          '<li>' + escapeHtml(detection.class) + ' — ' + percent(detection.score) + ' confidence; box [' +
+          detection.bbox.map((value) => Math.round(value)).join(', ') + ']</li>'
+        ).join('') + '</ol>';
+      }
+
+      function logTrial() {
+        const correctEl = document.querySelector('input[name="correct"]:checked');
+        if (!correctEl) return log('Select whether the detection was correct first.');
+        if (!frozenSnapshot) return log('Freeze and detect a frame first.');
+
+        const correct = correctEl.value === 'yes';
+        trials.push({ n: trials.length + 1, ...frozenSnapshot, correct });
+        renderResults();
+        log('Trial ' + trials.length + ': "' + frozenSnapshot.label + '" (' + percent(frozenSnapshot.score) + ', ' + formatMs(frozenSnapshot.inferenceMs) + ') — ' + (correct ? 'CORRECT' : 'WRONG'));
+
+        frozenSnapshot = null;
+        document.getElementById('snapshot-info').textContent = 'No frozen detection yet.';
+        document.getElementById('detections').textContent = '';
+        document.getElementById('log-trial').disabled = true;
+        document.querySelectorAll('input[name="correct"]').forEach((radio) => { radio.checked = false; });
+      }
+
+      function clearTrials() {
+        trials.length = 0;
+        renderResults();
+        log('All logged trials cleared.');
+      }
+
+      function renderResults() {
+        const section = document.getElementById('results-section');
+        if (!trials.length) {
+          section.style.display = 'none';
+          return;
+        }
+        section.style.display = 'block';
+        const correctCount = trials.filter((trial) => trial.correct).length;
+        const accuracy = (correctCount / trials.length) * 100;
+        const averageConfidence = (trials.reduce((sum, trial) => sum + trial.score, 0) / trials.length) * 100;
+        const averageInferenceMs = trials.reduce((sum, trial) => sum + trial.inferenceMs, 0) / trials.length;
+
+        document.getElementById('stats').innerHTML =
+          '<div class="stat"><b>' + trials.length + '</b>trials logged</div>' +
+          '<div class="stat"><b>' + correctCount + '/' + trials.length + '</b>correct</div>' +
+          '<div class="stat"><b>' + accuracy.toFixed(0) + '%</b>reliability</div>' +
+          '<div class="stat"><b>' + averageConfidence.toFixed(0) + '%</b>avg. confidence</div>' +
+          '<div class="stat"><b>' + formatMs(averageInferenceMs) + '</b>avg. inference</div>';
+
+        document.getElementById('trials-body').innerHTML = trials.map((trial) =>
+          '<tr><td>' + trial.n + '</td><td>' + escapeHtml(trial.label) + '</td><td>' + percent(trial.score) +
+          '</td><td>' + formatMs(trial.inferenceMs) + '</td><td class="' + (trial.correct ? 'correct' : 'wrong') + '">' +
+          (trial.correct ? 'Correct' : 'Wrong') + '</td></tr>'
+        ).join('');
+      }
+
+      async function copySummary() {
+        if (!trials.length) return;
+        const correctCount = trials.filter((trial) => trial.correct).length;
+        const accuracy = (correctCount / trials.length) * 100;
+        const averageConfidence = (trials.reduce((sum, trial) => sum + trial.score, 0) / trials.length) * 100;
+        const averageInferenceMs = trials.reduce((sum, trial) => sum + trial.inferenceMs, 0) / trials.length;
+        const summary =
+          'In ' + trials.length + ' freeze-frame test trials with TensorFlow.js COCO-SSD (MobileNet v2, 25% detection threshold; varied object/angle/lighting), detection was correct in ' +
+          correctCount + '/' + trials.length + ' trials (' + accuracy.toFixed(0) + '% reliability), with an average confidence score of ' +
+          averageConfidence.toFixed(0) + '% and average inference time of ' + formatMs(averageInferenceMs) + '.';
+
+        const out = document.getElementById('summary-out');
+        out.textContent = summary;
+        out.style.display = 'block';
+        try {
+          await navigator.clipboard.writeText(summary);
+          log('Summary copied to clipboard — paste it into the deck or comparison notes.');
+        } catch {
+          log('Could not access the clipboard — copy the displayed summary manually.');
+        }
+      }
+
+      function resizeOverlay() {
+        overlay.width = video.videoWidth;
+        overlay.height = video.videoHeight;
+      }
+
+      function stopCamera() {
+        if (stream) {
+          stream.getTracks().forEach((track) => track.stop());
+          stream = null;
+        }
+      }
+
+      function formatMs(value) {
+        return Math.round(value) + ' ms';
+      }
+
+      function percent(value) {
+        return ((value || 0) * 100).toFixed(0) + '%';
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>'"]/g, (character) => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
+        })[character]);
+      }
+    })();
+  </script>
+</body>
+</html>
