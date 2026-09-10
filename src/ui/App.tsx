@@ -17,7 +17,11 @@ import { ResultClarityScreen } from "./screens/ResultClarityScreen";
 import { HistoryScreen } from "./screens/HistoryScreen";
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState<AppScreen>("home");
+  const [currentScreen, setCurrentScreen] = useState<AppScreen>(() => {
+    // Deep-link support (?screen=result-match) so every screen is reachable/testable by URL
+    const param = new URLSearchParams(window.location.search).get("screen");
+    return (param as AppScreen) || "home";
+  });
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isManualOpen, setIsManualOpen] = useState(false);
   const [session, setSession] = useState<VerificationSession>(DEFAULT_SESSION);
