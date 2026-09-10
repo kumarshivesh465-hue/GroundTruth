@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
-    "preview": "vite preview --host"
+    "preview": "vite preview --host",
+    "verify": "node scripts/audit-screens.cjs"
   },
   "dependencies": {
     "@fontsource/plus-jakarta-sans": "^5.3.0",
@@ -26,6 +27,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^5.2.0",
+    "puppeteer-core": "^25.10.0",
     "tailwindcss": "^4.3.3",
     "vite": "^5.4.0",
     "vite-plugin-pwa": "^0.20.0"
