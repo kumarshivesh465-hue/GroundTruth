@@ -7,12 +7,19 @@ const SWEEP_START_HZ = 100;
 const SWEEP_END_HZ = 8000;
 const SWEEP_DURATION_SECONDS = 1.2;
 let sharedAudioContext = null;
+let sharedMicrophoneStream = null;
 
 function getAudioContext() {
   if (!sharedAudioContext || sharedAudioContext.state === 'closed') {
     sharedAudioContext = new (window.AudioContext || window.webkitAudioContext)();
   }
   return sharedAudioContext;
+}
+
+async function getMicrophoneStream() {
+  const hasLiveTrack = sharedMicrophoneStream?.getAudioTracks().some((track) => track.readyState === 'live');
+  if (!hasLiveTrack) sharedMicrophoneStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  return sharedMicrophoneStream;
 }
 
 function downsampleSpectrum(spectrum, bins) {
@@ -30,12 +37,12 @@ function downsampleSpectrum(spectrum, bins) {
 
 export async function captureAcousticResponse(onProgress = () => {}) {
   if (!navigator.mediaDevices?.getUserMedia) throw new Error('Microphone capture is not available in this browser.');
-  // Resume synchronously within the button gesture. Waiting for getUserMedia
-  // first can make Android treat later reference captures as autoplay and mute
-  // the oscillator even though microphone recording still succeeds.
+  // Keep both resources alive between 1/3, 2/3, and 3/3. Reopening an Android
+  // microphone stream can move Web Audio into a voice-call mode that silences
+  // the speaker output even though the microphone permission indicator remains.
   const context = getAudioContext();
   const resumePromise = context.resume();
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const stream = await getMicrophoneStream();
   let source; let analyser; let oscillator; let gain;
   try {
     await resumePromise;
@@ -83,9 +90,9 @@ export async function captureAcousticResponse(onProgress = () => {}) {
   } finally {
     try { oscillator?.stop(); } catch { /* already stopped */ }
     oscillator?.disconnect(); gain?.disconnect(); source?.disconnect();
-    stream.getTracks().forEach((track) => track.stop());
-    // Keep the same context for the next 2/3 and 3/3 recording. Recreating
-    // and closing it after every short capture is unreliable on some phones.
+    // The stream is intentionally kept until the page closes. This matches the
+    // original tested playground and prevents Android from dropping speaker
+    // output between consecutive calibration captures.
   }
 }
 
