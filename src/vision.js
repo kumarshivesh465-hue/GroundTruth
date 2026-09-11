@@ -31,6 +31,64 @@ function averageEmbedding(embeddings) {
   return average;
 }
 
+// An opened beverage can creates a large, contiguous dark aperture in the
+// lid. This deliberately focuses on that physical feature rather than the
+// brand colour, can body, table, or background used by the embedding model.
+function findLidOpening(frame) {
+  const context = frame.getContext('2d', { willReadFrequently: true });
+  const cropX = Math.floor(frame.width * 0.24);
+  const cropY = Math.floor(frame.height * 0.13);
+  const cropWidth = Math.max(1, Math.floor(frame.width * 0.52));
+  const cropHeight = Math.max(1, Math.floor(frame.height * 0.46));
+  const source = context.getImageData(cropX, cropY, cropWidth, cropHeight).data;
+  const gridWidth = 80;
+  const gridHeight = 80;
+  const dark = new Uint8Array(gridWidth * gridHeight);
+
+  for (let gridY = 0; gridY < gridHeight; gridY += 1) {
+    for (let gridX = 0; gridX < gridWidth; gridX += 1) {
+      const x = Math.min(cropWidth - 1, Math.floor((gridX + 0.5) * cropWidth / gridWidth));
+      const y = Math.min(cropHeight - 1, Math.floor((gridY + 0.5) * cropHeight / gridHeight));
+      const offset = ((y * cropWidth) + x) * 4;
+      const brightness = (0.2126 * source[offset]) + (0.7152 * source[offset + 1]) + (0.0722 * source[offset + 2]);
+      // Open apertures in the supplied images are near-black. Metal grooves
+      // and shadows do not form a similarly large connected area.
+      dark[(gridY * gridWidth) + gridX] = brightness < 58 ? 1 : 0;
+    }
+  }
+
+  const visited = new Uint8Array(dark.length);
+  let largestComponent = 0;
+  for (let index = 0; index < dark.length; index += 1) {
+    if (!dark[index] || visited[index]) continue;
+    const queue = [index];
+    visited[index] = 1;
+    let componentSize = 0;
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+      const point = queue[cursor];
+      componentSize += 1;
+      const x = point % gridWidth;
+      const y = Math.floor(point / gridWidth);
+      for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
+        for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
+          const neighbourX = x + offsetX;
+          const neighbourY = y + offsetY;
+          if (neighbourX < 0 || neighbourX >= gridWidth || neighbourY < 0 || neighbourY >= gridHeight) continue;
+          const neighbour = (neighbourY * gridWidth) + neighbourX;
+          if (dark[neighbour] && !visited[neighbour]) {
+            visited[neighbour] = 1;
+            queue.push(neighbour);
+          }
+        }
+      }
+    }
+    largestComponent = Math.max(largestComponent, componentSize);
+  }
+
+  const ratio = largestComponent / dark.length;
+  return { ratio, clearOpening: ratio >= 0.028 };
+}
+
 function loadImage(source) {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -92,22 +150,28 @@ async function classifySource(source) {
   frame.getContext('2d').drawImage(source, 0, 0, frame.width, frame.height);
 
   const startedAt = performance.now();
+  const opening = findLidOpening(frame);
   const classifier = await getClassifier();
   const embedding = await classifier.getEmbedding(frame);
   const sealedSimilarity = cosineSimilarity(embedding, classifier.sealedAverage);
   const unsealedSimilarity = cosineSimilarity(embedding, classifier.unsealedAverage);
-  const unsealed = unsealedSimilarity > sealedSimilarity;
+  // A clear aperture is definitive and overrides the global visual embedding.
+  // Otherwise the reference comparison provides the best available decision.
+  const unsealed = opening.clearOpening || unsealedSimilarity > sealedSimilarity;
   const margin = Math.abs(unsealedSimilarity - sealedSimilarity);
   // Similarity margin maps to a conservative operator-facing confidence.
-  const confidence = Math.min(0.97, Math.max(0.55, 0.55 + (margin * 5)));
+  const openingConfidence = Math.min(0.98, 0.72 + ((opening.ratio - 0.028) * 4));
+  const confidence = opening.clearOpening
+    ? openingConfidence
+    : Math.min(0.97, Math.max(0.55, 0.55 + (margin * 5)));
 
   return {
     imageDataUrl: frame.toDataURL('image/jpeg', 0.82),
-    status: margin < 0.025 ? 'unclear' : 'detected',
-    label: margin < 0.025 ? 'can seal unclear' : (unsealed ? 'unsealed can' : 'sealed can'),
+    status: opening.clearOpening || margin >= 0.025 ? 'detected' : 'unclear',
+    label: opening.clearOpening || margin >= 0.025 ? (unsealed ? 'unsealed can' : 'sealed can') : 'can seal unclear',
     confidence,
     inferenceMs: Math.round(performance.now() - startedAt),
-    referenceScores: { sealed: sealedSimilarity, unsealed: unsealedSimilarity },
+    referenceScores: { sealed: sealedSimilarity, unsealed: unsealedSimilarity, openingRatio: opening.ratio },
   };
 }
 
