@@ -7,13 +7,16 @@ const HISTORY_KEY = 'history';
 const FALLBACK_PREFIX = 'groundtruth-acoustic-v1:';
 const REQUIRED_SAMPLES = 3;
 const CONFIDENCE_GAP = 0.025;
-const blankCalibration = () => ({ version: 1, fullSamples: [], emptySamples: [], fullAverage: null, emptyAverage: null, createdAt: null, updatedAt: null, notes: '' });
+const FINGERPRINT_VERSION = 2;
+const blankCalibration = () => ({ version: 2, fingerprintVersion: FINGERPRINT_VERSION, fullSamples: [], emptySamples: [], fullAverage: null, emptyAverage: null, createdAt: null, updatedAt: null, notes: '' });
 
 function isProfile(profile) {
   return Array.isArray(profile) && profile.length === ACOUSTIC_PROFILE_BINS && profile.every((value) => typeof value === 'number' && Number.isFinite(value));
 }
 function sanitizeCalibration(value) {
-  if (!value || typeof value !== 'object') return blankCalibration();
+  // Version 1 averaged every FFT bin and cannot be compared to the new
+  // frequency-selective sweep. Start safely with fresh references instead.
+  if (!value || typeof value !== 'object' || value.fingerprintVersion !== FINGERPRINT_VERSION) return blankCalibration();
   const fullSamples = Array.isArray(value.fullSamples) ? value.fullSamples.filter(isProfile) : [];
   const emptySamples = Array.isArray(value.emptySamples) ? value.emptySamples.filter(isProfile) : [];
   return { ...blankCalibration(), fullSamples, emptySamples, fullAverage: averageFingerprint(fullSamples), emptyAverage: averageFingerprint(emptySamples), createdAt: typeof value.createdAt === 'string' ? value.createdAt : null, updatedAt: typeof value.updatedAt === 'string' ? value.updatedAt : null, notes: typeof value.notes === 'string' ? value.notes.slice(0, 1000) : '' };
@@ -72,4 +75,4 @@ export async function importCalibration(serialized) {
   const calibration = sanitizeCalibration(parsed.calibration); if (!calibration.fullSamples.length && !calibration.emptySamples.length) throw new Error('This backup has no valid reference profiles.');
   calibration.updatedAt = new Date().toISOString(); await write(CALIBRATION_KEY, calibration); return calibration;
 }
-export { REQUIRED_SAMPLES, CONFIDENCE_GAP };
+export { REQUIRED_SAMPLES, CONFIDENCE_GAP, FINGERPRINT_VERSION };

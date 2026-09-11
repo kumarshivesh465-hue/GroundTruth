@@ -1,27 +1,24 @@
 // Active acoustic sensing: emit a known sweep, collect the microphone's
 // frequency response, and keep only a small normalized profile. The profile
 // intentionally contains no recorded audio and can be stored locally.
-const FFT_SIZE = 2048;
-const PROFILE_BINS = 32;
-const SWEEP_START_HZ = 120;
-const SWEEP_END_HZ = 2400;
-const SWEEP_DURATION_SECONDS = 1.2;
+const FFT_SIZE = 4096;
+const PROFILE_BINS = 36;
+const SWEEP_START_HZ = 180;
+const SWEEP_END_HZ = 6000;
+const SWEEP_DURATION_SECONDS = 2.8;
 
-function profileFromSpectrum(spectrum, sampleRate) {
-  const profile = Array(PROFILE_BINS).fill(0);
-  const binWidth = sampleRate / FFT_SIZE;
-  const startBin = Math.max(1, Math.floor(SWEEP_START_HZ / binWidth));
-  const endBin = Math.min(spectrum.length - 1, Math.ceil(SWEEP_END_HZ / binWidth));
-  const span = Math.max(1, endBin - startBin + 1);
-  for (let bucket = 0; bucket < PROFILE_BINS; bucket += 1) {
-    const from = startBin + Math.floor((bucket * span) / PROFILE_BINS);
-    const to = Math.max(from + 1, startBin + Math.floor(((bucket + 1) * span) / PROFILE_BINS));
-    let sum = 0;
-    for (let bin = from; bin < to && bin <= endBin; bin += 1) sum += spectrum[bin];
-    profile[bucket] = sum / Math.max(1, to - from);
-  }
-  const norm = Math.sqrt(profile.reduce((sum, value) => sum + value * value, 0));
-  return norm ? profile.map((value) => Number((value / norm).toFixed(6))) : profile;
+function normalizeFingerprint(values) {
+  // Centre the profile first: cosine similarity must compare the *shape* of
+  // the frequency response, not the shared loudness of the phone speaker.
+  const logged = values.map((value) => Math.log1p(value));
+  const mean = logged.reduce((sum, value) => sum + value, 0) / logged.length;
+  const centred = logged.map((value) => value - mean);
+  const norm = Math.sqrt(centred.reduce((sum, value) => sum + value * value, 0));
+  return norm ? centred.map((value) => Number((value / norm).toFixed(6))) : centred;
+}
+
+function frequencyAt(elapsedSeconds) {
+  return SWEEP_START_HZ * Math.pow(SWEEP_END_HZ / SWEEP_START_HZ, elapsedSeconds / SWEEP_DURATION_SECONDS);
 }
 
 export async function captureAcousticResponse(onProgress = () => {}) {
@@ -36,42 +33,53 @@ export async function captureAcousticResponse(onProgress = () => {}) {
     source = context.createMediaStreamSource(stream);
     analyser = context.createAnalyser();
     analyser.fftSize = FFT_SIZE;
-    analyser.smoothingTimeConstant = 0.25;
+    analyser.smoothingTimeConstant = 0.08;
     source.connect(analyser);
     oscillator = context.createOscillator();
     gain = context.createGain();
     const start = context.currentTime + 0.04;
-    // Kept below typical media playback level, but high enough for the
-    // operator to hear the short calibration sweep on a phone speaker.
+    // An intentionally audible, three-second chirp. Device volume still
+    // controls final loudness; the app does not exceed a safe Web Audio gain.
     gain.gain.setValueAtTime(0.001, context.currentTime);
-    gain.gain.linearRampToValueAtTime(0.28, start + 0.03);
+    gain.gain.linearRampToValueAtTime(0.55, start + 0.08);
     gain.gain.linearRampToValueAtTime(0.001, start + SWEEP_DURATION_SECONDS);
     oscillator.connect(gain);
     gain.connect(context.destination);
     oscillator.frequency.setValueAtTime(SWEEP_START_HZ, start);
     oscillator.frequency.exponentialRampToValueAtTime(SWEEP_END_HZ, start + SWEEP_DURATION_SECONDS);
-    onProgress('Playing a short sweep and recording the acoustic response…');
+    onProgress('Playing a 3-second high-frequency sweep and recording the response…');
     oscillator.start(start);
     const spectrum = new Uint8Array(analyser.frequencyBinCount);
     const accumulated = Array(PROFILE_BINS).fill(0);
+    const samplesPerBand = Array(PROFILE_BINS).fill(0);
     let samples = 0; let totalEnergy = 0;
     await new Promise((resolve) => {
-      const stopAt = performance.now() + (SWEEP_DURATION_SECONDS * 1000) + 170;
+      const stopAt = performance.now() + (SWEEP_DURATION_SECONDS * 1000) + 260;
       const sample = () => {
         analyser.getByteFrequencyData(spectrum);
-        const profile = profileFromSpectrum(spectrum, context.sampleRate);
-        profile.forEach((value, index) => { accumulated[index] += value; });
+        const elapsed = context.currentTime - start;
+        if (elapsed >= 0 && elapsed <= SWEEP_DURATION_SECONDS) {
+          const band = Math.min(PROFILE_BINS - 1, Math.floor((elapsed / SWEEP_DURATION_SECONDS) * PROFILE_BINS));
+          const expectedBin = Math.round(frequencyAt(elapsed) / (context.sampleRate / FFT_SIZE));
+          let localEnergy = 0;
+          let binCount = 0;
+          for (let bin = Math.max(1, expectedBin - 2); bin <= Math.min(spectrum.length - 1, expectedBin + 2); bin += 1) {
+            localEnergy += spectrum[bin];
+            binCount += 1;
+          }
+          accumulated[band] += localEnergy / Math.max(binCount, 1);
+          samplesPerBand[band] += 1;
+        }
         totalEnergy += spectrum.reduce((sum, value) => sum + value, 0) / spectrum.length;
         samples += 1;
         if (performance.now() < stopAt) requestAnimationFrame(sample); else resolve();
       };
       requestAnimationFrame(sample);
     });
-    const fingerprint = accumulated.map((value) => value / Math.max(samples, 1));
-    const norm = Math.sqrt(fingerprint.reduce((sum, value) => sum + value * value, 0));
+    const fingerprint = accumulated.map((value, index) => value / Math.max(samplesPerBand[index], 1));
     return {
       status: 'recorded',
-      fingerprint: norm ? fingerprint.map((value) => Number((value / norm).toFixed(6))) : fingerprint,
+      fingerprint: normalizeFingerprint(fingerprint),
       averageEnergy: Math.round(totalEnergy / Math.max(samples, 1)),
       sampleCount: samples,
       sweep: { startHz: SWEEP_START_HZ, endHz: SWEEP_END_HZ, durationSeconds: SWEEP_DURATION_SECONDS },
