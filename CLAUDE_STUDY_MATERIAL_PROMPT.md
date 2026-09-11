@@ -37,7 +37,7 @@ If the dossier and source code conflict, **trust the source code** and explicitl
 - Never imply that the can demo proves LPG seal detection, LPG fill measurement, safety certification, or regulatory compliance.
 - The visual references are small: 7 sealed-can photos and 6 unsealed-can photos. Do not call this a production dataset or a trained LPG model.
 - The acoustic method is a local, device/container/setup-specific prototype. Do not invent accuracy, precision, recall, or an “80% result.” If no documented held-out metrics exist, say that accuracy is not yet established.
-- Explain that `FINGERPRINT_VERSION = 4` requires fresh calibration when old reference profiles use an incompatible version.
+- Explain that `FINGERPRINT_VERSION = 5` requires fresh calibration when old reference profiles use an incompatible version.
 - Explain that core comparison and storage are local, but model assets may require a first internet download before being cached. Do not claim that first launch is fully offline.
 - The modules `reconcile.js` and `llm.js` exist, but verify whether `AnalysisScreen.tsx` invokes them. If it does not, say the analysis screen is currently presentational/session-routed rather than end-to-end wired.
 - Separate “implemented now,” “demo-only/prototype,” and “future work” in every major section.
@@ -51,7 +51,7 @@ If the dossier and source code conflict, **trust the source code** and explicitl
 4. **Architecture explanation**: a compact ASCII diagram and a step-by-step data flow.
 5. **Technology stack table**: every active technology, model, library, browser API, and its reason for use. Clearly label inactive/playground-only packages if relevant.
 6. **Visual-method study notes**: MobileNet embeddings, class centroids, cosine similarity, lid-opening heuristic, local references, confidence, common failure cases.
-7. **Acoustic-method study notes**: calibration, exponential sweep equation, 100–8000 Hz, 3.4-second duration, FFT size 2048, 32 ambient-corrected bins, log/mean/L2 normalization, cosine comparison, adaptive reference-separation-based decision threshold (minimum 0.001, cap 0.025), Full/Empty/Recheck behavior, and why raw calibration audio is not stored.
+7. **Acoustic-method study notes**: calibration, exponential sweep equation, 100–8000 Hz, 1.2-second duration, FFT size 2048, 32 whole-spectrum bins, original broad-spectrum averaging, cosine comparison, closest-reference prediction, Full/Empty/Recheck behavior, and why raw calibration audio is not stored.
 8. **Storage, privacy, PWA, and deployment**: IndexedDB/localStorage fallback, export/import, service worker, HTTPS permission requirement, first-use model downloading/caching.
 9. **Exact user demo script**: what to tap, what to say to judges, and how to explain an unexpected Recheck or wrong result without bluffing.
 10. **Testing and validation plan**: how to get real accuracy; held-out visual data, frozen calibration, confusion matrix, precision/recall/F1, acoustic repeatability, false-positive/false-negative and Recheck rate.

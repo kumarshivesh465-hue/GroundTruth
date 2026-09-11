@@ -6,21 +6,17 @@ const CALIBRATION_KEY = 'calibration';
 const HISTORY_KEY = 'history';
 const FALLBACK_PREFIX = 'groundtruth-acoustic-v1:';
 const REQUIRED_SAMPLES = 3;
-// Cosine scores for phone recordings often live very close to 1. A fixed 2.5%
-// gap throws away every result when a particular phone's two calibrated
-// centroids are themselves close together. This is the absolute lower bound;
-// the actual decision threshold is derived from the saved class separation.
-const CONFIDENCE_GAP = 0.001;
-const FINGERPRINT_VERSION = 4;
-const blankCalibration = () => ({ version: 4, fingerprintVersion: FINGERPRINT_VERSION, fullSamples: [], emptySamples: [], fullAverage: null, emptyAverage: null, createdAt: null, updatedAt: null, notes: '' });
+const CONFIDENCE_GAP = 0;
+const FINGERPRINT_VERSION = 5;
+const blankCalibration = () => ({ version: 5, fingerprintVersion: FINGERPRINT_VERSION, fullSamples: [], emptySamples: [], fullAverage: null, emptyAverage: null, createdAt: null, updatedAt: null, notes: '' });
 
 function isProfile(profile) {
   return Array.isArray(profile) && profile.length === ACOUSTIC_PROFILE_BINS && profile.every((value) => typeof value === 'number' && Number.isFinite(value));
 }
 function sanitizeCalibration(value) {
-  // Older fingerprints used a different frequency-profile method. Mixing
-  // reference versions would make class scores meaningless, so a fresh set of
-  // three Full and three Empty references is required after this update.
+  // Version 5 restores the exact profile semantics from the tested original
+  // playground. Earlier centered or ambient-subtracted profiles cannot be
+  // mixed with it, so the app requires fresh references.
   if (!value || typeof value !== 'object' || value.fingerprintVersion !== FINGERPRINT_VERSION) return blankCalibration();
   const fullSamples = Array.isArray(value.fullSamples) ? value.fullSamples.filter(isProfile) : [];
   const emptySamples = Array.isArray(value.emptySamples) ? value.emptySamples.filter(isProfile) : [];
@@ -62,15 +58,12 @@ export function classifyFingerprint(fingerprint, calibration) {
   const fullSimilarity = cosineSimilarity(fingerprint, calibration.fullAverage);
   const emptySimilarity = cosineSimilarity(fingerprint, calibration.emptyAverage);
   const gap = Math.abs(fullSimilarity - emptySimilarity);
-  const referenceSeparation = Math.max(0, 1 - cosineSimilarity(calibration.fullAverage, calibration.emptyAverage));
-  // A reference pair that is far apart earns a stricter threshold. Closely
-  // clustered phone profiles can still produce a directional result, but its
-  // confidence stays low because the reference set itself is weakly separated.
-  const decisionThreshold = Math.max(CONFIDENCE_GAP, Math.min(0.025, referenceSeparation * 0.15));
-  const prediction = gap >= decisionThreshold ? (fullSimilarity > emptySimilarity ? 'full' : 'empty') : 'recheck';
-  const profileQuality = Math.min(1, referenceSeparation / 0.025);
-  const confidence = Math.min(100, Math.round((gap / decisionThreshold) * 100 * profileQuality));
-  return { prediction, fullSimilarity, emptySimilarity, gap, confidence, decisionThreshold, referenceSeparation };
+  // This matches acoustic-test.html: choose the closer reference average.
+  // Recheck is still used for missing/invalid calibration, not a fabricated
+  // fixed cosine-gap rule that would discard the playground's predictions.
+  const prediction = fullSimilarity > emptySimilarity ? 'full' : 'empty';
+  const confidence = Math.min(99, Math.max(1, Math.round(gap * 10000)));
+  return { prediction, fullSimilarity, emptySimilarity, gap, confidence };
 }
 export async function getAcousticHistory() { const history = await read(HISTORY_KEY, []); return Array.isArray(history) ? history.filter((item) => item && typeof item === 'object') : []; }
 export async function saveAcousticTest(result) {

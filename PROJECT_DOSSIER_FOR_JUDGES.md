@@ -21,7 +21,7 @@ GroundTruth tackles a trust problem in LPG delivery: after a cylinder is handed 
 
 GroundTruth is an evidence-capture and verification prototype for LPG delivery. Its user journey is: capture the container image, record the delivery claim, run an acoustic check, review the evidence, and receive a Match, Mismatch, or Recheck outcome. It is built as a React PWA so it can run from a phone browser and retain data locally.
 
-The project has two technical proof-of-concepts. First, the visual module uses TensorFlow.js MobileNet embeddings and local reference images. For the demo, it has seven sealed-can and six unsealed-can examples. It also has a direct visual opening detector: if a clear dark opening is visible on the lid, it classifies the can as unsealed. Second, the acoustic module plays an audible 3.4-second exponential frequency sweep, samples the microphone response into a compact 32-value ambient-corrected fingerprint, and compares that fingerprint with three known-full and three known-empty local references. It does not save a large raw audio recording as calibration.
+The project has two technical proof-of-concepts. First, the visual module uses TensorFlow.js MobileNet embeddings and local reference images. For the demo, it has seven sealed-can and six unsealed-can examples. It also has a direct visual opening detector: if a clear dark opening is visible on the lid, it classifies the can as unsealed. Second, the acoustic module mirrors the original tested playground: it plays an audible 1.2-second exponential frequency sweep, averages its microphone spectrum into a compact 32-value fingerprint, and compares that fingerprint with three known-full and three known-empty local references. It does not save a large raw audio recording as calibration.
 
 The important engineering decision is calibration. Every phone/container setup has its own acoustic behavior, so the user records three labelled references for each state. A normal check cannot replace those references; it only produces a prediction and optional labelled validation history. The app includes export/import and reset controls because browser storage can be cleared.
 
@@ -165,7 +165,7 @@ Acoustic response depends on the phone speaker/microphone, volume, case, distanc
 5. It averages the three Full and three Empty profiles independently.
 6. A normal check only compares to those averages. It never overwrites calibration.
 
-The implementation requires `REQUIRED_SAMPLES = 3` for each class. Its current fingerprint format is **version 4**. References made with earlier fingerprint versions are intentionally treated as incompatible and must be recalibrated, preventing comparison of mismatched signal-processing schemes.
+The implementation requires `REQUIRED_SAMPLES = 3` for each class. Its current fingerprint format is **version 5**. References made with earlier fingerprint versions are intentionally treated as incompatible and must be recalibrated, preventing comparison of mismatched signal-processing schemes.
 
 ### Signal generation and capture
 
@@ -173,17 +173,17 @@ The current sweep configuration is:
 
 - start frequency: 100 Hz
 - end frequency: 8000 Hz
-- exponential sweep duration: 3.4 seconds
-- oscillator gain: ramped in and out to reduce clicks
+- exponential sweep duration: 1.2 seconds
+- oscillator gain: 0.6, matching the original tested playground
 - FFT size: 2048
-- profile length: 32 ambient-corrected frequency bands
-- microphone constraints request disabled echo cancellation, noise suppression, and automatic gain control where the browser permits it
+- profile length: 32 whole-spectrum frequency bands
+- microphone request: browser default `audio: true`, matching the original tested playground
 
 For an exponential sweep, expected frequency at time `t` is:
 
 `f(t) = f_start × (f_end / f_start)^(t / T)`
 
-The app captures a short ambient baseline before the sweep, averages the entire microphone spectrum during the known sweep into 32 bands, and subtracts the ambient baseline. This follows the broad-spectrum approach used by the original acoustic playground and is more tolerant of analyser timing and phone DSP than pairing a fast chirp to one narrow FFT band per animation frame.
+The app averages the entire microphone spectrum during the known sweep plus a short 150 ms tail into 32 bands. This is the same broad-spectrum method used by the original acoustic playground, rather than pairing a fast chirp to one narrow FFT band per animation frame.
 
 ### Fingerprint and comparison
 
@@ -205,7 +205,7 @@ For a live profile, the app computes:
 - `scoreEmpty`: similarity to the averaged Empty fingerprint
 - `gap = |scoreFull - scoreEmpty|`
 
-The higher score is the predicted state only if the gap exceeds a threshold derived from the separation of that device's own Full and Empty reference averages (with a `0.001` minimum cosine gap and a `0.025` cap). Otherwise GroundTruth returns **Recheck**. Confidence is additionally reduced when the two saved class references are inherently close. The UI displays both similarities and the gap so the decision is inspectable rather than a black box.
+The higher score is the predicted state, matching the original playground. **Recheck** is reserved for missing or invalid calibration rather than a fixed cosine-gap rule. The UI still displays both similarities and their gap so the directional result remains inspectable.
 
 ### Validation history is separate from calibration
 
@@ -302,8 +302,8 @@ The first success criterion should not simply be “highest accuracy.” It shou
 2. Open Capture Evidence and show a top-down sealed/unsealed can lid. Explain that the screen gives a local reference comparison, and that an open aperture is the strongest cue.
 3. Record a short delivery claim.
 4. Open Calibration. Explain the need for three known-full and three known-empty recordings on the same phone/setup. Show the saved counters, notes, and export option.
-5. Run Acoustic Check. Keep the phone placement and volume consistent. Let the 3.4-second audible sweep finish.
-6. Point out the two similarity scores and their gap. Explain that a small gap produces Recheck.
+5. Run Acoustic Check. Keep the phone placement and volume consistent. Let the 1.2-second audible sweep finish.
+6. Point out the two similarity scores and their gap. Explain that the closer reference is the directional result and must be validated with labelled tests.
 7. Mark the actual known state only for validation, explaining it changes history/accuracy—not calibration.
 8. Conclude: “This is designed to make evidence collection and ambiguity visible. In a real LPG deployment, measurement and safety approval would remain with validated procedures and human inspection.”
 
@@ -339,7 +339,7 @@ For calibration, the app stores compact numeric frequency fingerprints, labels, 
 
 ### Why did old calibration disappear after an update?
 
-The fingerprint algorithm changed to version 4 to use an ambient-corrected broad-spectrum profile that is more tolerant of phone timing and DSP. Old vector formats are not comparable, so the app intentionally requires fresh references instead of producing misleading results from incompatible data.
+The fingerprint algorithm changed to version 5 to exactly restore the original tested playground's broad-spectrum profile semantics. Old vector formats are not comparable, so the app intentionally requires fresh references instead of producing misleading results from incompatible data.
 
 ### How do you prevent a normal test from corrupting calibration?
 
