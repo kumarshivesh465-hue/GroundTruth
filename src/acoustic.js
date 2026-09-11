@@ -1,10 +1,10 @@
 // Active acoustic sensing: emit a known sweep, collect the microphone's
 // frequency response, and keep only a small normalized profile. The profile
 // intentionally contains no recorded audio and can be stored locally.
-const FFT_SIZE = 4096;
-const PROFILE_BINS = 36;
-const SWEEP_START_HZ = 180;
-const SWEEP_END_HZ = 6000;
+const FFT_SIZE = 2048;
+const PROFILE_BINS = 32;
+const SWEEP_START_HZ = 100;
+const SWEEP_END_HZ = 8000;
 const SWEEP_DURATION_SECONDS = 3.4;
 
 function normalizeFingerprint(values) {
@@ -17,8 +17,41 @@ function normalizeFingerprint(values) {
   return norm ? centred.map((value) => Number((value / norm).toFixed(6))) : centred;
 }
 
-function frequencyAt(elapsedSeconds) {
-  return SWEEP_START_HZ * Math.pow(SWEEP_END_HZ / SWEEP_START_HZ, elapsedSeconds / SWEEP_DURATION_SECONDS);
+function downsampleSpectrum(spectrum, bins) {
+  const profile = Array(bins).fill(0);
+  const chunkSize = spectrum.length / bins;
+  for (let index = 0; index < bins; index += 1) {
+    const from = Math.floor(index * chunkSize);
+    const to = Math.max(from + 1, Math.floor((index + 1) * chunkSize));
+    let total = 0;
+    for (let bin = from; bin < to; bin += 1) total += spectrum[bin];
+    profile[index] = total / (to - from);
+  }
+  return profile;
+}
+
+function readSpectrum(analyser, spectrum) {
+  analyser.getByteFrequencyData(spectrum);
+  return downsampleSpectrum(spectrum, PROFILE_BINS);
+}
+
+async function captureAmbientProfile(analyser, spectrum, context) {
+  // Measure the room/microphone floor before the speaker starts. Subtracting
+  // it later makes the fingerprint respond to the sweep rather than to a fan,
+  // people talking, or a permanently noisy microphone band.
+  const total = Array(PROFILE_BINS).fill(0);
+  let reads = 0;
+  const stopAt = performance.now() + 320;
+  await new Promise((resolve) => {
+    const sample = () => {
+      const values = readSpectrum(analyser, spectrum);
+      values.forEach((value, index) => { total[index] += value; });
+      reads += 1;
+      if (performance.now() < stopAt && context.state === 'running') requestAnimationFrame(sample); else resolve();
+    };
+    requestAnimationFrame(sample);
+  });
+  return total.map((value) => value / Math.max(reads, 1));
 }
 
 export async function captureAcousticResponse(onProgress = () => {}) {
@@ -35,13 +68,16 @@ export async function captureAcousticResponse(onProgress = () => {}) {
     analyser.fftSize = FFT_SIZE;
     analyser.smoothingTimeConstant = 0;
     source.connect(analyser);
+    const spectrum = new Uint8Array(analyser.frequencyBinCount);
+    onProgress('Measuring ambient sound before the sweep…');
+    const ambientProfile = await captureAmbientProfile(analyser, spectrum, context);
     oscillator = context.createOscillator();
     gain = context.createGain();
     const start = context.currentTime + 0.04;
     // An intentionally audible, three-second chirp. Device volume still
     // controls final loudness; the app does not exceed a safe Web Audio gain.
     gain.gain.setValueAtTime(0.001, context.currentTime);
-    gain.gain.linearRampToValueAtTime(0.55, start + 0.08);
+    gain.gain.linearRampToValueAtTime(0.65, start + 0.08);
     gain.gain.linearRampToValueAtTime(0.001, start + SWEEP_DURATION_SECONDS);
     oscillator.connect(gain);
     gain.connect(context.destination);
@@ -49,39 +85,31 @@ export async function captureAcousticResponse(onProgress = () => {}) {
     oscillator.frequency.exponentialRampToValueAtTime(SWEEP_END_HZ, start + SWEEP_DURATION_SECONDS);
     onProgress('Playing a 3.4-second high-frequency sweep and recording the response…');
     oscillator.start(start);
-    const spectrum = new Uint8Array(analyser.frequencyBinCount);
+    // This deliberately returns to the broad 32-band response profile used by
+    // the original successful playground. The previous implementation paired
+    // every animation-frame FFT with a rapidly changing expected chirp bin.
+    // On phone browsers, analyser latency and phone DSP made that narrow-band
+    // pairing unstable, so a new live capture could look unlike both references.
+    // Here we average the whole response spectrum across the known sweep and
+    // subtract the short ambient baseline captured above.
     const accumulated = Array(PROFILE_BINS).fill(0);
-    const samplesPerBand = Array(PROFILE_BINS).fill(0);
     let samples = 0; let totalEnergy = 0;
     await new Promise((resolve) => {
-      // An FFT represents audio that arrived during its preceding analysis
-      // window. Compensating that half-window delay is essential: without it,
-      // a fast chirp is sampled at the wrong frequency (most visibly above
-      // 3 kHz), weakening or reversing full/empty separation.
-      const analysisDelaySeconds = analyser.fftSize / context.sampleRate / 2;
-      const stopAt = performance.now() + (SWEEP_DURATION_SECONDS * 1000) + (analysisDelaySeconds * 1000) + 220;
+      const stopAt = performance.now() + (SWEEP_DURATION_SECONDS * 1000) + 180;
       const sample = () => {
-        analyser.getByteFrequencyData(spectrum);
-        const elapsed = context.currentTime - start - analysisDelaySeconds;
-        if (elapsed >= 0 && elapsed <= SWEEP_DURATION_SECONDS) {
-          const band = Math.min(PROFILE_BINS - 1, Math.floor((elapsed / SWEEP_DURATION_SECONDS) * PROFILE_BINS));
-          const expectedBin = Math.round(frequencyAt(elapsed) / (context.sampleRate / FFT_SIZE));
-          let localEnergy = 0;
-          let binCount = 0;
-          for (let bin = Math.max(1, expectedBin - 2); bin <= Math.min(spectrum.length - 1, expectedBin + 2); bin += 1) {
-            localEnergy += spectrum[bin];
-            binCount += 1;
-          }
-          accumulated[band] += localEnergy / Math.max(binCount, 1);
-          samplesPerBand[band] += 1;
+        const values = readSpectrum(analyser, spectrum);
+        if (context.currentTime >= start) {
+          values.forEach((value, index) => {
+            accumulated[index] += Math.max(0, value - ambientProfile[index]);
+          });
+          samples += 1;
         }
         totalEnergy += spectrum.reduce((sum, value) => sum + value, 0) / spectrum.length;
-        samples += 1;
         if (performance.now() < stopAt) requestAnimationFrame(sample); else resolve();
       };
       requestAnimationFrame(sample);
     });
-    const fingerprint = accumulated.map((value, index) => value / Math.max(samplesPerBand[index], 1));
+    const fingerprint = accumulated.map((value) => value / Math.max(samples, 1));
     return {
       status: 'recorded',
       fingerprint: normalizeFingerprint(fingerprint),

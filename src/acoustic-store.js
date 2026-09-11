@@ -7,15 +7,16 @@ const HISTORY_KEY = 'history';
 const FALLBACK_PREFIX = 'groundtruth-acoustic-v1:';
 const REQUIRED_SAMPLES = 3;
 const CONFIDENCE_GAP = 0.025;
-const FINGERPRINT_VERSION = 3;
-const blankCalibration = () => ({ version: 3, fingerprintVersion: FINGERPRINT_VERSION, fullSamples: [], emptySamples: [], fullAverage: null, emptyAverage: null, createdAt: null, updatedAt: null, notes: '' });
+const FINGERPRINT_VERSION = 4;
+const blankCalibration = () => ({ version: 4, fingerprintVersion: FINGERPRINT_VERSION, fullSamples: [], emptySamples: [], fullAverage: null, emptyAverage: null, createdAt: null, updatedAt: null, notes: '' });
 
 function isProfile(profile) {
   return Array.isArray(profile) && profile.length === ACOUSTIC_PROFILE_BINS && profile.every((value) => typeof value === 'number' && Number.isFinite(value));
 }
 function sanitizeCalibration(value) {
-  // Older fingerprints used an uncorrected sweep-analysis timeline and cannot
-  // be compared to the delay-corrected frequency-selective sweep.
+  // Older fingerprints used a different frequency-profile method. Mixing
+  // reference versions would make class scores meaningless, so a fresh set of
+  // three Full and three Empty references is required after this update.
   if (!value || typeof value !== 'object' || value.fingerprintVersion !== FINGERPRINT_VERSION) return blankCalibration();
   const fullSamples = Array.isArray(value.fullSamples) ? value.fullSamples.filter(isProfile) : [];
   const emptySamples = Array.isArray(value.emptySamples) ? value.emptySamples.filter(isProfile) : [];

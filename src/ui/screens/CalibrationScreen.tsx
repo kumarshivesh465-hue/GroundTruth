@@ -121,7 +121,7 @@ export const CalibrationScreen: React.FC<CalibrationScreenProps> = ({ onNavigate
         <div className="rounded-2xl border border-slate-200 p-4 space-y-3">
           <div>
             <h3 className="text-sm font-bold text-slate-900">Record {label === 'full' ? 'Known Full' : 'Known Empty'} reference</h3>
-            <p className="mt-1 text-xs text-slate-600 leading-relaxed">Use the same phone position near the same container for all three recordings. This records a 36-value frequency response from a 3.4-second sweep, not an audio file.</p>
+            <p className="mt-1 text-xs text-slate-600 leading-relaxed">Use the same phone position near the same container for all three recordings. This records a 32-value ambient-corrected frequency response from a 3.4-second sweep, not an audio file.</p>
           </div>
           <textarea value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={1000} rows={2} placeholder="Phone / container notes (optional)" className="w-full rounded-xl border border-slate-200 p-3 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#00A3B4]/40" />
           <button id="record-calibration-reference-btn" onClick={() => void recordReference()} disabled={isCapturing || count(label) >= REQUIRED_SAMPLES} className="w-full h-12 rounded-xl bg-[#00A3B4] hover:bg-[#008D9B] disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer">
