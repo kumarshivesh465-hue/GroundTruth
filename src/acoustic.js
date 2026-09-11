@@ -6,6 +6,14 @@ const PROFILE_BINS = 32;
 const SWEEP_START_HZ = 100;
 const SWEEP_END_HZ = 8000;
 const SWEEP_DURATION_SECONDS = 1.2;
+let sharedAudioContext = null;
+
+function getAudioContext() {
+  if (!sharedAudioContext || sharedAudioContext.state === 'closed') {
+    sharedAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return sharedAudioContext;
+}
 
 function downsampleSpectrum(spectrum, bins) {
   const profile = Array(bins).fill(0);
@@ -22,11 +30,17 @@ function downsampleSpectrum(spectrum, bins) {
 
 export async function captureAcousticResponse(onProgress = () => {}) {
   if (!navigator.mediaDevices?.getUserMedia) throw new Error('Microphone capture is not available in this browser.');
+  // Resume synchronously within the button gesture. Waiting for getUserMedia
+  // first can make Android treat later reference captures as autoplay and mute
+  // the oscillator even though microphone recording still succeeds.
+  const context = getAudioContext();
+  const resumePromise = context.resume();
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  const context = new (window.AudioContext || window.webkitAudioContext)();
   let source; let analyser; let oscillator; let gain;
   try {
-    await context.resume();
+    await resumePromise;
+    if (context.state !== 'running') await context.resume();
+    if (context.state !== 'running') throw new Error('The phone blocked speaker playback. Tap Record reference again after allowing sound for this site.');
     source = context.createMediaStreamSource(stream);
     analyser = context.createAnalyser();
     analyser.fftSize = FFT_SIZE;
@@ -70,7 +84,8 @@ export async function captureAcousticResponse(onProgress = () => {}) {
     try { oscillator?.stop(); } catch { /* already stopped */ }
     oscillator?.disconnect(); gain?.disconnect(); source?.disconnect();
     stream.getTracks().forEach((track) => track.stop());
-    await context.close();
+    // Keep the same context for the next 2/3 and 3/3 recording. Recreating
+    // and closing it after every short capture is unreliable on some phones.
   }
 }
 
