@@ -205,7 +205,7 @@ For a live profile, the app computes:
 - `scoreEmpty`: similarity to the averaged Empty fingerprint
 - `gap = |scoreFull - scoreEmpty|`
 
-The higher score is the predicted state only if the gap is at least `0.025` (2.5 percentage points after display conversion). Otherwise GroundTruth returns **Recheck**. The UI displays both similarities and the gap so the decision is inspectable rather than a black box.
+The higher score is the predicted state only if the gap exceeds a threshold derived from the separation of that device's own Full and Empty reference averages (with a `0.001` minimum cosine gap and a `0.025` cap). Otherwise GroundTruth returns **Recheck**. Confidence is additionally reduced when the two saved class references are inherently close. The UI displays both similarities and the gap so the decision is inspectable rather than a black box.
 
 ### Validation history is separate from calibration
 

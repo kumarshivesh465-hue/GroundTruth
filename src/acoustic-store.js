@@ -6,7 +6,11 @@ const CALIBRATION_KEY = 'calibration';
 const HISTORY_KEY = 'history';
 const FALLBACK_PREFIX = 'groundtruth-acoustic-v1:';
 const REQUIRED_SAMPLES = 3;
-const CONFIDENCE_GAP = 0.025;
+// Cosine scores for phone recordings often live very close to 1. A fixed 2.5%
+// gap throws away every result when a particular phone's two calibrated
+// centroids are themselves close together. This is the absolute lower bound;
+// the actual decision threshold is derived from the saved class separation.
+const CONFIDENCE_GAP = 0.001;
 const FINGERPRINT_VERSION = 4;
 const blankCalibration = () => ({ version: 4, fingerprintVersion: FINGERPRINT_VERSION, fullSamples: [], emptySamples: [], fullAverage: null, emptyAverage: null, createdAt: null, updatedAt: null, notes: '' });
 
@@ -55,9 +59,18 @@ export async function addCalibrationSample(label, fingerprint, notes = '') {
 export async function resetCalibration() { const calibration = blankCalibration(); await write(CALIBRATION_KEY, calibration); return calibration; }
 export function classifyFingerprint(fingerprint, calibration) {
   if (!isCalibrated(calibration) || !isProfile(fingerprint)) return { prediction: 'recheck', fullSimilarity: 0, emptySimilarity: 0, gap: 0, confidence: 0 };
-  const fullSimilarity = cosineSimilarity(fingerprint, calibration.fullAverage); const emptySimilarity = cosineSimilarity(fingerprint, calibration.emptyAverage); const gap = Math.abs(fullSimilarity - emptySimilarity);
-  const prediction = gap >= CONFIDENCE_GAP ? (fullSimilarity > emptySimilarity ? 'full' : 'empty') : 'recheck';
-  return { prediction, fullSimilarity, emptySimilarity, gap, confidence: Math.min(100, Math.round((gap / CONFIDENCE_GAP) * 100)) };
+  const fullSimilarity = cosineSimilarity(fingerprint, calibration.fullAverage);
+  const emptySimilarity = cosineSimilarity(fingerprint, calibration.emptyAverage);
+  const gap = Math.abs(fullSimilarity - emptySimilarity);
+  const referenceSeparation = Math.max(0, 1 - cosineSimilarity(calibration.fullAverage, calibration.emptyAverage));
+  // A reference pair that is far apart earns a stricter threshold. Closely
+  // clustered phone profiles can still produce a directional result, but its
+  // confidence stays low because the reference set itself is weakly separated.
+  const decisionThreshold = Math.max(CONFIDENCE_GAP, Math.min(0.025, referenceSeparation * 0.15));
+  const prediction = gap >= decisionThreshold ? (fullSimilarity > emptySimilarity ? 'full' : 'empty') : 'recheck';
+  const profileQuality = Math.min(1, referenceSeparation / 0.025);
+  const confidence = Math.min(100, Math.round((gap / decisionThreshold) * 100 * profileQuality));
+  return { prediction, fullSimilarity, emptySimilarity, gap, confidence, decisionThreshold, referenceSeparation };
 }
 export async function getAcousticHistory() { const history = await read(HISTORY_KEY, []); return Array.isArray(history) ? history.filter((item) => item && typeof item === 'object') : []; }
 export async function saveAcousticTest(result) {
