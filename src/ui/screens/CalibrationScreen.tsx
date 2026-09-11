@@ -7,9 +7,11 @@ import { captureAcousticResponse } from '../../acoustic.js';
 import {
   REQUIRED_SAMPLES,
   addCalibrationSample,
+  calibrationQuality,
   exportCalibration,
   getAcousticHistory,
   getCalibration,
+  hasRequiredSamples,
   importCalibration,
   isCalibrated,
   resetCalibration,
@@ -92,6 +94,7 @@ export const CalibrationScreen: React.FC<CalibrationScreenProps> = ({ onNavigate
 
   const summary = validationSummary(history);
   const count = (kind: 'full' | 'empty') => calibration?.[kind === 'full' ? 'fullSamples' : 'emptySamples']?.length || 0;
+  const quality = calibration ? calibrationQuality(calibration) : null;
 
   return (
     <div className="flex-1 flex flex-col bg-white select-none">
@@ -101,11 +104,13 @@ export const CalibrationScreen: React.FC<CalibrationScreenProps> = ({ onNavigate
           <div className="flex gap-3 items-start">
             <Waves className="w-5 h-5 shrink-0 mt-0.5 text-[#007C89]" />
             <div>
-              <h2 className="text-base font-bold text-slate-900">{isCalibrated(calibration || { fullSamples: [], emptySamples: [] }) ? 'Calibration ready' : 'Calibration required'}</h2>
+              <h2 className="text-base font-bold text-slate-900">{isCalibrated(calibration || { fullSamples: [], emptySamples: [] }) ? 'Calibration ready' : hasRequiredSamples(calibration || { fullSamples: [], emptySamples: [] }) ? 'References need recapture' : 'Calibration required'}</h2>
               <p className="mt-1 text-xs leading-relaxed text-slate-700">Save exactly {REQUIRED_SAMPLES} references for each known state. Later checks compare only against these saved averages; they never overwrite them.</p>
             </div>
           </div>
         </div>
+
+        {quality && hasRequiredSamples(calibration || { fullSamples: [], emptySamples: [] }) && !quality.ready && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900"><strong>Reference quality is too weak for a reliable prediction.</strong><br />{quality.message} Weakest class margin: {(quality.weakestMargin * 100).toFixed(2)}%.</div>}
 
         <div className="grid grid-cols-2 gap-3">
           {(['full', 'empty'] as const).map((kind) => {

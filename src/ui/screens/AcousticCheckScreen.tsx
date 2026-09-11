@@ -5,7 +5,7 @@ import { BottomNav } from '../components/BottomNav';
 import { StepProgress } from '../components/StepProgress';
 import { AlertTriangle, ArrowRight, CheckCircle2, Info, Mic, Settings2, Volume2, Waves } from 'lucide-react';
 import { captureAcousticResponse } from '../../acoustic.js';
-import { classifyFingerprint, getCalibration, isCalibrated, saveAcousticTest, setActualLabel } from '../../acoustic-store.js';
+import { calibrationQuality, classifyFingerprint, getCalibration, hasRequiredSamples, isCalibrated, saveAcousticTest, setActualLabel } from '../../acoustic-store.js';
 
 interface AcousticCheckScreenProps {
   onNavigate: (screen: AppScreen) => void;
@@ -27,7 +27,7 @@ export const AcousticCheckScreen: React.FC<AcousticCheckScreenProps> = ({ onNavi
   const loadCalibration = async () => {
     const saved = await getCalibration();
     setCalibration(saved);
-    setStatus(isCalibrated(saved) ? 'Ready. Keep the phone in the calibrated position and start the sweep.' : 'Not calibrated. Save 3 Full and 3 Empty references before a live check.');
+    setStatus(isCalibrated(saved) ? 'Ready. Keep the phone in the calibrated position and start the sweep.' : hasRequiredSamples(saved) ? calibrationQuality(saved).message : 'Not calibrated. Save 3 Full and 3 Empty references before a live check.');
   };
   useEffect(() => { void loadCalibration(); }, []);
 
@@ -76,7 +76,7 @@ export const AcousticCheckScreen: React.FC<AcousticCheckScreenProps> = ({ onNavi
         <div className="space-y-1"><h2 className="text-[20px] font-bold text-slate-900 tracking-tight" style={{ fontFamily: 'var(--font-heading)' }}>Acoustic Sweep</h2><p className="text-[13px] text-slate-600 leading-snug">Place the phone near the cylinder as it was during calibration. The app plays the original audible 1.2-second high-frequency sweep and compares its frequency response locally.</p></div>
 
         <div className={`p-4 rounded-2xl border space-y-2.5 ${calibrated ? 'bg-white border-slate-200' : 'bg-amber-50 border-amber-200'}`}>
-          <div className="flex items-center justify-between"><span className="text-[11px] font-bold text-slate-600 tracking-wider uppercase font-mono">CALIBRATION</span><span className={`text-xs font-bold ${calibrated ? 'text-emerald-700' : 'text-amber-700'}`}>{calibrated ? '3 FULL + 3 EMPTY SAVED' : 'NOT CALIBRATED'}</span></div>
+          <div className="flex items-center justify-between"><span className="text-[11px] font-bold text-slate-600 tracking-wider uppercase font-mono">CALIBRATION</span><span className={`text-xs font-bold ${calibrated ? 'text-emerald-700' : 'text-amber-700'}`}>{calibrated ? '3 FULL + 3 EMPTY SAVED' : hasRequiredSamples(calibration || { fullSamples: [], emptySamples: [] }) ? 'REFERENCES OVERLAP' : 'NOT CALIBRATED'}</span></div>
           <div className="flex items-start gap-2"><Info className="w-4 h-4 text-slate-600 shrink-0 mt-0.5" /><p aria-live="polite" className="text-[12px] text-slate-600 leading-snug">{status}</p></div>
           {!calibrated && <button onClick={() => onNavigate('calibration')} className="w-full mt-1 h-10 rounded-xl bg-[#00A3B4] text-white text-xs font-semibold cursor-pointer">Open Calibration</button>}
           {error && <p role="alert" className="text-xs text-red-700">{error}</p>}

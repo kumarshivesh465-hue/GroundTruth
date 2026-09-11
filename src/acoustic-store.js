@@ -13,6 +13,29 @@ const blankCalibration = () => ({ version: 5, fingerprintVersion: FINGERPRINT_VE
 function isProfile(profile) {
   return Array.isArray(profile) && profile.length === ACOUSTIC_PROFILE_BINS && profile.every((value) => typeof value === 'number' && Number.isFinite(value));
 }
+export function hasRequiredSamples(calibration) {
+  return Boolean(calibration) && calibration.fullSamples.length >= REQUIRED_SAMPLES && calibration.emptySamples.length >= REQUIRED_SAMPLES;
+}
+export function calibrationQuality(calibration) {
+  if (!hasRequiredSamples(calibration)) return { ready: false, weakestMargin: 0, message: 'Save three Full and three Empty references first.' };
+  const { fullSamples, emptySamples, fullAverage, emptyAverage } = calibration;
+  const margins = [
+    ...fullSamples.map((sample) => cosineSimilarity(sample, fullAverage) - cosineSimilarity(sample, emptyAverage)),
+    ...emptySamples.map((sample) => cosineSimilarity(sample, emptyAverage) - cosineSimilarity(sample, fullAverage)),
+  ];
+  const weakestMargin = Math.min(...margins);
+  // A capture must remain at least 1.5 cosine points nearer to its own class
+  // average than the opposite class. Otherwise the references overlap and a
+  // later live sweep can flip labels from one attempt to the next.
+  const ready = weakestMargin >= 0.015;
+  return {
+    ready,
+    weakestMargin,
+    message: ready
+      ? 'Reference classes are sufficiently separated for a live comparison.'
+      : 'Full and Empty references overlap. Reset and recapture with the phone fixed in one position and the same media volume.',
+  };
+}
 function sanitizeCalibration(value) {
   // Version 5 restores the exact profile semantics from the tested original
   // playground. Earlier centered or ambient-subtracted profiles cannot be
@@ -42,7 +65,7 @@ async function write(key, value) {
   await new Promise((resolve, reject) => { const request = database.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).put(value, key); request.onsuccess = () => resolve(); request.onerror = () => reject(request.error); });
 }
 export async function getCalibration() { return sanitizeCalibration(await read(CALIBRATION_KEY, blankCalibration())); }
-export function isCalibrated(calibration) { return calibration.fullSamples.length >= REQUIRED_SAMPLES && calibration.emptySamples.length >= REQUIRED_SAMPLES; }
+export function isCalibrated(calibration) { return calibrationQuality(calibration).ready; }
 export async function addCalibrationSample(label, fingerprint, notes = '') {
   if (!['full', 'empty'].includes(label) || !isProfile(fingerprint)) throw new Error('Invalid calibration sample.');
   const calibration = await getCalibration(); const samplesKey = label === 'full' ? 'fullSamples' : 'emptySamples';
@@ -54,7 +77,7 @@ export async function addCalibrationSample(label, fingerprint, notes = '') {
 }
 export async function resetCalibration() { const calibration = blankCalibration(); await write(CALIBRATION_KEY, calibration); return calibration; }
 export function classifyFingerprint(fingerprint, calibration) {
-  if (!isCalibrated(calibration) || !isProfile(fingerprint)) return { prediction: 'recheck', fullSimilarity: 0, emptySimilarity: 0, gap: 0, confidence: 0 };
+  if (!isCalibrated(calibration) || !isProfile(fingerprint)) return { prediction: 'recheck', fullSimilarity: 0, emptySimilarity: 0, gap: 0, confidence: 0, calibrationMessage: calibrationQuality(calibration).message };
   const fullSimilarity = cosineSimilarity(fingerprint, calibration.fullAverage);
   const emptySimilarity = cosineSimilarity(fingerprint, calibration.emptyAverage);
   const gap = Math.abs(fullSimilarity - emptySimilarity);
