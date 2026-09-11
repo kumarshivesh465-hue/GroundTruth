@@ -3,6 +3,7 @@ export type AppScreen =
   | 'capture'
   | 'record-claim'
   | 'acoustic-check'
+  | 'calibration'
   | 'review-evidence'
   | 'ai-analysis'
   | 'result-match'
@@ -56,14 +57,36 @@ export interface HistoryRecord {
   };
 }
 
+export interface VisionEvidence {
+  label: string | null;
+  confidence: number;
+  inferenceMs: number;
+  status: 'detected' | 'unclear';
+  imageDataUrl: string;
+}
+
 export interface VerificationSession {
   selectedPreset: CylinderPreset;
   capturedImage: string | null;
+  visionEvidence: VisionEvidence | null;
   audioDurationSeconds: number;
   hasRecordedAudio: boolean;
+  /** The original worker recording. This remains the source of truth for a claim. */
+  audioBlob: Blob | null;
+  /** Object URL created locally from audioBlob; never an uploaded URL. */
+  audioUrl: string | null;
+  audioMimeType: string | null;
+  /** Down-sampled measured amplitudes used for the local waveform preview. */
+  audioWaveform: number[];
+  audioCapturedAt: string | null;
+  transcript: string | null;
+  transcriptionState: 'idle' | 'loading-model' | 'transcribing' | 'complete' | 'error';
+  transcriptionError: string | null;
   acousticSignalQuality: number;
   ambientNoiseDb: number;
   resonanceStatus: 'Stable' | 'Calibrating' | 'Unstable';
+  acousticPrediction?: 'full' | 'empty' | 'recheck';
+  acousticConfidence?: number;
   outcome: VerificationOutcome;
   customerName: string;
   cylinderUid: string;

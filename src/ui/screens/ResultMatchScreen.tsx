@@ -3,6 +3,7 @@ import { AppScreen, VerificationSession } from '../types';
 import { TopAppBar } from '../components/TopAppBar';
 import { BottomNav } from '../components/BottomNav';
 import { SafeGasMatchLogo } from '../components/ResultLogos';
+import { VisionEvidenceCard } from '../components/VisionEvidenceCard';
 import {
   CheckCircle2,
   ShieldCheck,
@@ -129,6 +130,9 @@ export const ResultMatchScreen: React.FC<ResultMatchScreenProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Live visual detection captured on-device */}
+        <VisionEvidenceCard evidence={session.visionEvidence} compact />
 
         {/* DIGITAL RECEIPT Card matching Image 6 */}
         <div className="p-3.5 rounded-2xl bg-[#F8FAFC] border border-slate-200/90 shadow-2xs space-y-3">

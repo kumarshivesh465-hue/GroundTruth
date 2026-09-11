@@ -4,7 +4,7 @@ import { TopAppBar } from '../components/TopAppBar';
 import { BottomNav } from '../components/BottomNav';
 import { HomeHeroBanner } from '../components/ResultLogos';
 import { INITIAL_RECENT_ACTIVITY } from '../data/mockData';
-import { Plus, Shield, CheckCircle2, AlertTriangle, Clock, ChevronRight, Info } from 'lucide-react';
+import { Plus, Shield, CheckCircle2, AlertTriangle, Clock, ChevronRight, Info, Settings2 } from 'lucide-react';
 
 interface HomeScreenProps {
   onNavigate: (screen: AppScreen) => void;
@@ -102,6 +102,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <span>ONLINE</span>
           </div>
         </div>
+
+        <button
+          id="home-open-calibration-btn"
+          onClick={() => onNavigate('calibration')}
+          className="w-full -mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 flex items-center justify-between text-left hover:bg-slate-50 transition-colors cursor-pointer"
+        >
+          <span className="flex items-center gap-2 text-xs font-semibold text-slate-700"><Settings2 className="w-4 h-4 text-[#00A3B4]" />Acoustic calibration &amp; backup</span>
+          <ChevronRight className="w-4 h-4 text-slate-400" />
+        </button>
 
         {/* Recent Activity List */}
         <div className="space-y-2.5 pt-1">

@@ -3,7 +3,7 @@ import { AppScreen, VerificationSession } from '../types';
 import { TopAppBar } from '../components/TopAppBar';
 import { BottomNav } from '../components/BottomNav';
 import { CylinderGraphic } from '../components/CylinderGraphic';
-import { Camera, Mic, Activity, CheckCircle2, Play, Pause, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Camera, Mic, Activity, CheckCircle2, Play, Pause, ArrowRight, ShieldCheck, EyeOff } from 'lucide-react';
 
 interface ReviewEvidenceScreenProps {
   onNavigate: (screen: AppScreen) => void;
@@ -19,6 +19,8 @@ export const ReviewEvidenceScreen: React.FC<ReviewEvidenceScreenProps> = ({
 }) => {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [audioProgress, setAudioProgress] = useState(40);
+
+  const visualUnclear = session.visionEvidence?.status === 'unclear';
 
   const toggleAudioPlayback = () => {
     setIsPlayingAudio(!isPlayingAudio);
@@ -81,28 +83,57 @@ export const ReviewEvidenceScreen: React.FC<ReviewEvidenceScreenProps> = ({
               <Camera className="w-4 h-4 text-[#00A3B4]" />
               <span>visual</span>
             </div>
-            <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 font-mono bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              <span>SUCCESS</span>
+            <div
+              className={
+                'flex items-center gap-1 text-[11px] font-bold font-mono px-2 py-0.5 rounded-full border ' +
+                (visualUnclear
+                  ? 'text-amber-700 bg-amber-50 border-amber-200'
+                  : 'text-emerald-700 bg-emerald-50 border-emerald-200')
+              }
+            >
+              {visualUnclear ? (
+                <EyeOff className="w-3.5 h-3.5 text-amber-600" />
+              ) : (
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              )}
+              <span>{visualUnclear ? 'UNCLEAR' : 'SUCCESS'}</span>
             </div>
           </div>
 
-          {/* Photo Preview */}
+          {/* Photo Preview: live captured frame when available, preset graphic otherwise */}
           <div className="w-full h-38 rounded-xl bg-[#6c6764] overflow-hidden flex items-center justify-center p-2 relative shadow-inner">
-            <div className="w-full h-full max-w-[200px] flex items-center justify-center">
-              <CylinderGraphic
-                variant={
-                  session.outcome === 'clarity'
-                    ? 'blurred'
-                    : session.selectedPreset.brand === 'HP Gas'
-                    ? 'orange'
-                    : 'red'
-                }
-                label={session.selectedPreset.brand.toUpperCase()}
-                showStamps={true}
+            {session.visionEvidence?.imageDataUrl ? (
+              <img
+                src={session.visionEvidence.imageDataUrl}
+                alt="Captured evidence frame"
+                className="w-full h-full object-cover"
               />
-            </div>
+            ) : (
+              <div className="w-full h-full max-w-[200px] flex items-center justify-center">
+                <CylinderGraphic
+                  variant={
+                    session.outcome === 'clarity'
+                      ? 'blurred'
+                      : session.selectedPreset.brand === 'HP Gas'
+                      ? 'orange'
+                      : 'red'
+                  }
+                  label={session.selectedPreset.brand.toUpperCase()}
+                  showStamps={true}
+                />
+              </div>
+            )}
           </div>
+
+          {/* Detection metadata when a live frame was captured */}
+          {session.visionEvidence && (
+            <div className="flex items-center justify-between px-1 text-[11px] text-slate-500 font-mono">
+              <span>
+                {session.visionEvidence.label ?? 'no object'} · {Math.round(session.visionEvidence.confidence * 100)}%
+              </span>
+              <span>Local reference comparison · {session.visionEvidence.inferenceMs}ms</span>
+            </div>
+          )}
 
           <button
             onClick={() => onNavigate('capture')}

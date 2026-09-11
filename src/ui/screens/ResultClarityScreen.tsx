@@ -1,8 +1,9 @@
 import React from 'react';
-import { AppScreen } from '../types';
+import { AppScreen, VerificationSession } from '../types';
 import { TopAppBar } from '../components/TopAppBar';
 import { BottomNav } from '../components/BottomNav';
 import { ClarityLoopGraphic } from '../components/ResultLogos';
+import { VisionEvidenceCard } from '../components/VisionEvidenceCard';
 import {
   AlertCircle,
   Camera,
@@ -17,12 +18,14 @@ interface ResultClarityScreenProps {
   onNavigate: (screen: AppScreen) => void;
   onOpenNotifications: () => void;
   onOpenManual: () => void;
+  session: VerificationSession;
 }
 
 export const ResultClarityScreen: React.FC<ResultClarityScreenProps> = ({
   onNavigate,
   onOpenNotifications,
   onOpenManual,
+  session,
 }) => {
   return (
     <div className="flex-1 flex flex-col bg-white select-none">
@@ -118,6 +121,9 @@ export const ResultClarityScreen: React.FC<ResultClarityScreenProps> = ({
             <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 self-center transition-colors" />
           </div>
         </div>
+
+        {/* Live visual detection captured on-device */}
+        <VisionEvidenceCard evidence={session.visionEvidence} compact />
 
         {/* NEED HELP? Card matching Image 3 */}
         <div className="p-4 rounded-2xl bg-[#ECFEFF] border border-[#A5F3FC] shadow-2xs space-y-3">

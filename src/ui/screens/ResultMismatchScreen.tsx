@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { AppScreen } from '../types';
+import { AppScreen, VerificationSession } from '../types';
 import { TopAppBar } from '../components/TopAppBar';
 import { BottomNav } from '../components/BottomNav';
 import { EvidenceConflictLogo } from '../components/ResultLogos';
+import { VisionEvidenceCard } from '../components/VisionEvidenceCard';
 import {
   AlertCircle,
   RotateCcw,
@@ -14,12 +15,23 @@ import {
 
 interface ResultMismatchScreenProps {
   onNavigate: (screen: AppScreen) => void;
+  session: VerificationSession;
 }
 
 export const ResultMismatchScreen: React.FC<ResultMismatchScreenProps> = ({
   onNavigate,
+  session,
 }) => {
   const [reportSaved, setReportSaved] = useState(false);
+
+  // Live on-device detection label when available; simulated brand otherwise.
+  const visualDetected = session.visionEvidence?.label
+    ? session.visionEvidence.label.charAt(0).toUpperCase() +
+      session.visionEvidence.label.slice(1) +
+      ' · ' +
+      Math.round(session.visionEvidence.confidence * 100) +
+      '%'
+    : session.selectedPreset.detectedBrand;
 
   const handleSaveReport = () => {
     setReportSaved(true);
@@ -72,11 +84,11 @@ export const ResultMismatchScreen: React.FC<ResultMismatchScreenProps> = ({
               <div className="grid grid-cols-2 gap-2 text-[12px]">
                 <div>
                   <span className="block text-[10px] font-bold text-slate-600 font-mono">DETECTED</span>
-                  <span className="font-bold text-[#B91C1C]">HP GAS (14.2kg)</span>
+                  <span className="font-bold text-[#B91C1C]">{visualDetected}</span>
                 </div>
                 <div>
                   <span className="block text-[10px] font-bold text-slate-600 font-mono">EXPECTED</span>
-                  <span className="font-bold text-emerald-700">Bharatgas (14.2kg)</span>
+                  <span className="font-bold text-emerald-700">{session.selectedPreset.expectedBrand}</span>
                 </div>
               </div>
             </div>
@@ -119,6 +131,9 @@ export const ResultMismatchScreen: React.FC<ResultMismatchScreenProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Live visual detection captured on-device */}
+        <VisionEvidenceCard evidence={session.visionEvidence} compact />
 
         {/* RECOMMENDED ACTIONS matching Image 7 */}
         <div className="space-y-2 pt-1">

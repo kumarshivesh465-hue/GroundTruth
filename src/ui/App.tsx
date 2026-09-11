@@ -9,6 +9,7 @@ import { HomeScreen } from "./screens/HomeScreen";
 import { CaptureEvidenceScreen } from "./screens/CaptureEvidenceScreen";
 import { RecordClaimScreen } from "./screens/RecordClaimScreen";
 import { AcousticCheckScreen } from "./screens/AcousticCheckScreen";
+import { CalibrationScreen } from "./screens/CalibrationScreen";
 import { ReviewEvidenceScreen } from "./screens/ReviewEvidenceScreen";
 import { AnalysisScreen } from "./screens/AnalysisScreen";
 import { ResultMatchScreen } from "./screens/ResultMatchScreen";
@@ -63,6 +64,13 @@ export default function App() {
             setSession={setSession}
           />
         );
+      case "calibration":
+        return (
+          <CalibrationScreen
+            onNavigate={setCurrentScreen}
+            onOpenNotifications={() => setIsNotificationOpen(true)}
+          />
+        );
       case "review-evidence":
         return (
           <ReviewEvidenceScreen
@@ -91,6 +99,7 @@ export default function App() {
         return (
           <ResultMismatchScreen
             onNavigate={setCurrentScreen}
+            session={session}
           />
         );
       case "result-clarity":
@@ -99,6 +108,7 @@ export default function App() {
             onNavigate={setCurrentScreen}
             onOpenNotifications={() => setIsNotificationOpen(true)}
             onOpenManual={() => setIsManualOpen(true)}
+            session={session}
           />
         );
       case "history":
