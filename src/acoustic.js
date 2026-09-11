@@ -5,7 +5,7 @@ const FFT_SIZE = 4096;
 const PROFILE_BINS = 36;
 const SWEEP_START_HZ = 180;
 const SWEEP_END_HZ = 6000;
-const SWEEP_DURATION_SECONDS = 2.8;
+const SWEEP_DURATION_SECONDS = 3.4;
 
 function normalizeFingerprint(values) {
   // Centre the profile first: cosine similarity must compare the *shape* of
@@ -33,7 +33,7 @@ export async function captureAcousticResponse(onProgress = () => {}) {
     source = context.createMediaStreamSource(stream);
     analyser = context.createAnalyser();
     analyser.fftSize = FFT_SIZE;
-    analyser.smoothingTimeConstant = 0.08;
+    analyser.smoothingTimeConstant = 0;
     source.connect(analyser);
     oscillator = context.createOscillator();
     gain = context.createGain();
@@ -47,17 +47,22 @@ export async function captureAcousticResponse(onProgress = () => {}) {
     gain.connect(context.destination);
     oscillator.frequency.setValueAtTime(SWEEP_START_HZ, start);
     oscillator.frequency.exponentialRampToValueAtTime(SWEEP_END_HZ, start + SWEEP_DURATION_SECONDS);
-    onProgress('Playing a 3-second high-frequency sweep and recording the response…');
+    onProgress('Playing a 3.4-second high-frequency sweep and recording the response…');
     oscillator.start(start);
     const spectrum = new Uint8Array(analyser.frequencyBinCount);
     const accumulated = Array(PROFILE_BINS).fill(0);
     const samplesPerBand = Array(PROFILE_BINS).fill(0);
     let samples = 0; let totalEnergy = 0;
     await new Promise((resolve) => {
-      const stopAt = performance.now() + (SWEEP_DURATION_SECONDS * 1000) + 260;
+      // An FFT represents audio that arrived during its preceding analysis
+      // window. Compensating that half-window delay is essential: without it,
+      // a fast chirp is sampled at the wrong frequency (most visibly above
+      // 3 kHz), weakening or reversing full/empty separation.
+      const analysisDelaySeconds = analyser.fftSize / context.sampleRate / 2;
+      const stopAt = performance.now() + (SWEEP_DURATION_SECONDS * 1000) + (analysisDelaySeconds * 1000) + 220;
       const sample = () => {
         analyser.getByteFrequencyData(spectrum);
-        const elapsed = context.currentTime - start;
+        const elapsed = context.currentTime - start - analysisDelaySeconds;
         if (elapsed >= 0 && elapsed <= SWEEP_DURATION_SECONDS) {
           const band = Math.min(PROFILE_BINS - 1, Math.floor((elapsed / SWEEP_DURATION_SECONDS) * PROFILE_BINS));
           const expectedBin = Math.round(frequencyAt(elapsed) / (context.sampleRate / FFT_SIZE));
