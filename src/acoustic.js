@@ -1,6 +1,5 @@
-// Active acoustic sensing: this deliberately mirrors the acquisition method
-// in the original acoustic-test.html playground that was tested on the demo
-// phone. It keeps a compact spectrum profile, never a raw audio recording.
+// Capture a compact frequency profile from a speaker sweep. Calibration stores
+// this numeric profile rather than the original microphone recording.
 const FFT_SIZE = 2048;
 const PROFILE_BINS = 32;
 const SWEEP_START_HZ = 100;
@@ -37,9 +36,8 @@ function downsampleSpectrum(spectrum, bins) {
 
 export async function captureAcousticResponse(onProgress = () => {}) {
   if (!navigator.mediaDevices?.getUserMedia) throw new Error('Microphone capture is not available in this browser.');
-  // Keep both resources alive between 1/3, 2/3, and 3/3. Reopening an Android
-  // microphone stream can move Web Audio into a voice-call mode that silences
-  // the speaker output even though the microphone permission indicator remains.
+  // Reuse the audio session during consecutive calibration captures. Some
+  // mobile browsers can lose speaker output when the microphone is reopened.
   const context = getAudioContext();
   const resumePromise = context.resume();
   const stream = await getMicrophoneStream();
@@ -63,8 +61,7 @@ export async function captureAcousticResponse(onProgress = () => {}) {
     oscillator.frequency.exponentialRampToValueAtTime(SWEEP_END_HZ, start + SWEEP_DURATION_SECONDS);
     onProgress('Playing the original 1.2-second 100–8000 Hz sweep and recording the response…');
     oscillator.start(start);
-    // Same broad-spectrum accumulation as acoustic-test.html: 32 chunks of
-    // the complete FFT, averaged throughout the sweep plus a short tail.
+    // Average 32 frequency regions throughout the sweep and its short tail.
     const accumulated = Array(PROFILE_BINS).fill(0);
     let samples = 0; let totalEnergy = 0;
     await new Promise((resolve) => {
@@ -90,9 +87,7 @@ export async function captureAcousticResponse(onProgress = () => {}) {
   } finally {
     try { oscillator?.stop(); } catch { /* already stopped */ }
     oscillator?.disconnect(); gain?.disconnect(); source?.disconnect();
-    // The stream is intentionally kept until the page closes. This matches the
-    // original tested playground and prevents Android from dropping speaker
-    // output between consecutive calibration captures.
+    // Keep the stream available for the next reference capture on this page.
   }
 }
 

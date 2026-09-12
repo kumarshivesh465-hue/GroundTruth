@@ -24,9 +24,8 @@ export function calibrationQuality(calibration) {
     ...emptySamples.map((sample) => cosineSimilarity(sample, emptyAverage) - cosineSimilarity(sample, fullAverage)),
   ];
   const weakestMargin = Math.min(...margins);
-  // A capture must remain at least 1.5 cosine points nearer to its own class
-  // average than the opposite class. Otherwise the references overlap and a
-  // later live sweep can flip labels from one attempt to the next.
+  // Each saved reference must be at least 1.5 cosine points closer to its own
+  // class average. Overlapping references are not safe for live prediction.
   const ready = weakestMargin >= 0.015;
   return {
     ready,
@@ -37,9 +36,8 @@ export function calibrationQuality(calibration) {
   };
 }
 function sanitizeCalibration(value) {
-  // Version 5 restores the exact profile semantics from the tested original
-  // playground. Earlier centered or ambient-subtracted profiles cannot be
-  // mixed with it, so the app requires fresh references.
+  // Fingerprint formats are intentionally versioned. Profiles from a different
+  // format cannot be compared safely and require fresh calibration.
   if (!value || typeof value !== 'object' || value.fingerprintVersion !== FINGERPRINT_VERSION) return blankCalibration();
   const fullSamples = Array.isArray(value.fullSamples) ? value.fullSamples.filter(isProfile) : [];
   const emptySamples = Array.isArray(value.emptySamples) ? value.emptySamples.filter(isProfile) : [];
@@ -81,9 +79,8 @@ export function classifyFingerprint(fingerprint, calibration) {
   const fullSimilarity = cosineSimilarity(fingerprint, calibration.fullAverage);
   const emptySimilarity = cosineSimilarity(fingerprint, calibration.emptyAverage);
   const gap = Math.abs(fullSimilarity - emptySimilarity);
-  // This matches acoustic-test.html: choose the closer reference average.
-  // Recheck is still used for missing/invalid calibration, not a fabricated
-  // fixed cosine-gap rule that would discard the playground's predictions.
+  // Choose the closer reference average. Recheck is reserved for invalid or
+  // insufficient calibration rather than a fixed similarity-gap rule.
   const prediction = fullSimilarity > emptySimilarity ? 'full' : 'empty';
   const confidence = Math.min(99, Math.max(1, Math.round(gap * 10000)));
   return { prediction, fullSimilarity, emptySimilarity, gap, confidence };

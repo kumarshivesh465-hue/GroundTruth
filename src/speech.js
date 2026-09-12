@@ -1,5 +1,4 @@
-// On-device Whisper adapter used by the Claim screen. This pins the same
-// stable runtime/model pair proven in the standalone Whisper playground.
+// On-device Whisper adapter used by the claim-recording screen.
 const TRANSFORMERS_URL = 'https://esm.sh/@huggingface/transformers@3.8.1?bundle';
 const WHISPER_MODEL = 'onnx-community/whisper-tiny.en';
 let transcriberPromise = null;

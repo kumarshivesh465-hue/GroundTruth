@@ -1,7 +1,6 @@
-// Reference-based visual seal check for the live demo. The supplied can-lid
-// examples are bundled with the app and stay on-device. MobileNet provides a
-// compact visual embedding; we compare each live frame with the average
-// sealed and unsealed reference embeddings using cosine similarity.
+// Reference-based can-lid check for the demo. MobileNet produces a visual
+// embedding for each frame, which is compared with sealed and unsealed local
+// reference averages using cosine similarity.
 const SEALED_REFERENCES = Array.from(
   { length: 7 },
   (_, index) => `/can-seal-references/sealed/sealed-${String(index + 1).padStart(2, '0')}.png`,
@@ -31,9 +30,8 @@ function averageEmbedding(embeddings) {
   return average;
 }
 
-// An opened beverage can creates a large, contiguous dark aperture in the
-// lid. This deliberately focuses on that physical feature rather than the
-// brand colour, can body, table, or background used by the embedding model.
+// An open can creates a large connected dark aperture in the lid. This check
+// focuses on the opening rather than colour, branding, or background.
 function findLidOpening(frame) {
   const context = frame.getContext('2d', { willReadFrequently: true });
   const cropX = Math.floor(frame.width * 0.24);
@@ -51,8 +49,7 @@ function findLidOpening(frame) {
       const y = Math.min(cropHeight - 1, Math.floor((gridY + 0.5) * cropHeight / gridHeight));
       const offset = ((y * cropWidth) + x) * 4;
       const brightness = (0.2126 * source[offset]) + (0.7152 * source[offset + 1]) + (0.0722 * source[offset + 2]);
-      // Open apertures in the supplied images are near-black. Metal grooves
-      // and shadows do not form a similarly large connected area.
+      // Metal grooves and small shadows should not form a large connected area.
       dark[(gridY * gridWidth) + gridX] = brightness < 58 ? 1 : 0;
     }
   }
@@ -155,11 +152,10 @@ async function classifySource(source) {
   const embedding = await classifier.getEmbedding(frame);
   const sealedSimilarity = cosineSimilarity(embedding, classifier.sealedAverage);
   const unsealedSimilarity = cosineSimilarity(embedding, classifier.unsealedAverage);
-  // A clear aperture is definitive and overrides the global visual embedding.
-  // Otherwise the reference comparison provides the best available decision.
+  // A clear aperture overrides the global embedding comparison.
   const unsealed = opening.clearOpening || unsealedSimilarity > sealedSimilarity;
   const margin = Math.abs(unsealedSimilarity - sealedSimilarity);
-  // Similarity margin maps to a conservative operator-facing confidence.
+  // The similarity margin becomes an operator-facing confidence value.
   const openingConfidence = Math.min(0.98, 0.72 + ((opening.ratio - 0.028) * 4));
   const confidence = opening.clearOpening
     ? openingConfidence
