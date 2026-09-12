@@ -45,12 +45,16 @@ export const CalibrationScreen: React.FC<CalibrationScreenProps> = ({ onNavigate
   const recordReference = async () => {
     setError('');
     setIsCapturing(true);
+    console.log('[GroundTruth Acoustic] calibration-record-requested', { label });
     try {
       const response = await captureAcousticResponse(setMessage);
+      console.log('[GroundTruth Acoustic] calibration-response-received', { label, averageEnergy: response.averageEnergy, sampleCount: response.sampleCount, fingerprintBins: response.fingerprint.length });
       const next = await addCalibrationSample(label, response.fingerprint, notes);
       setCalibration(next);
+      console.log('[GroundTruth Acoustic] calibration-ui-updated', { label, savedCount: next[label === 'full' ? 'fullSamples' : 'emptySamples'].length, requiredSamples: REQUIRED_SAMPLES });
       setMessage(`${label === 'full' ? 'Full' : 'Empty'} reference ${next[label === 'full' ? 'fullSamples' : 'emptySamples'].length}/${REQUIRED_SAMPLES} saved. No audio was retained.`);
     } catch (captureError) {
+      console.error('[GroundTruth Acoustic] calibration-record-failed', captureError);
       setError(captureError instanceof Error ? captureError.message : 'The reference could not be recorded.');
       setMessage('Allow microphone access, reduce background noise, and try again.');
     } finally {
@@ -60,6 +64,7 @@ export const CalibrationScreen: React.FC<CalibrationScreenProps> = ({ onNavigate
 
   const handleReset = async () => {
     if (!window.confirm('Reset both Full and Empty references? Existing validation history will stay intact.')) return;
+    console.warn('[GroundTruth Acoustic] calibration-reset-requested');
     setCalibration(await resetCalibration());
     setMessage('Calibration reset. Record three Full and three Empty references again.');
     setError('');
@@ -126,7 +131,7 @@ export const CalibrationScreen: React.FC<CalibrationScreenProps> = ({ onNavigate
         <div className="rounded-2xl border border-slate-200 p-4 space-y-3">
           <div>
             <h3 className="text-sm font-bold text-slate-900">Record {label === 'full' ? 'Known Full' : 'Known Empty'} reference</h3>
-            <p className="mt-1 text-xs text-slate-600 leading-relaxed">Use the same phone position near the same container for all three recordings. This records a 32-value frequency response from the original 1.2-second sweep, not an audio file.</p>
+            <p className="mt-1 text-xs text-slate-600 leading-relaxed">Use the same phone position near the same container for all three recordings. This records a 16-tone resonance response over about 3 seconds, not an audio file.</p>
           </div>
           <textarea value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={1000} rows={2} placeholder="Phone / container notes (optional)" className="w-full rounded-xl border border-slate-200 p-3 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#00A3B4]/40" />
           <button id="record-calibration-reference-btn" onClick={() => void recordReference()} disabled={isCapturing || count(label) >= REQUIRED_SAMPLES} className="w-full h-12 rounded-xl bg-[#00A3B4] hover:bg-[#008D9B] disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer">
