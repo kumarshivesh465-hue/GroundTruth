@@ -10,6 +10,19 @@ const TONE_SETTLE_MS = 90;
 const TONE_SAMPLE_MS = 120;
 let sharedAudioContext = null;
 let sharedMicrophoneStream = null;
+const LOG_PREFIX = '[GroundTruth Acoustic]';
+
+function log(event, details = {}) {
+  console.log(`${LOG_PREFIX} ${event}`, details);
+}
+
+function warn(event, details = {}) {
+  console.warn(`${LOG_PREFIX} ${event}`, details);
+}
+
+function logError(event, error) {
+  console.error(`${LOG_PREFIX} ${event}`, error);
+}
 
 function getAudioContext() {
   if (!sharedAudioContext || sharedAudioContext.state === 'closed') {
@@ -20,6 +33,10 @@ function getAudioContext() {
 
 async function getMicrophoneStream() {
   const hasLiveTrack = sharedMicrophoneStream?.getAudioTracks().some((track) => track.readyState === 'live');
+  if (hasLiveTrack) {
+    log('microphone-reused', { trackCount: sharedMicrophoneStream.getAudioTracks().length });
+    return sharedMicrophoneStream;
+  }
   if (!hasLiveTrack) {
     // Voice-call processing removes exactly the small resonance differences we
     // need. These are ideals: browsers may ignore an unsupported constraint.
@@ -29,6 +46,11 @@ async function getMicrophoneStream() {
         noiseSuppression: { ideal: false },
         autoGainControl: { ideal: false },
       },
+    });
+    const track = sharedMicrophoneStream.getAudioTracks()[0];
+    log('microphone-ready', {
+      settings: track?.getSettings?.(),
+      requestedProcessing: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
     });
   }
   return sharedMicrophoneStream;
@@ -48,7 +70,11 @@ function readToneLevel(analyser, data, frequency, sampleRate) {
 }
 
 export async function captureAcousticResponse(onProgress = () => {}) {
-  if (!navigator.mediaDevices?.getUserMedia) throw new Error('Microphone capture is not available in this browser.');
+  if (!navigator.mediaDevices?.getUserMedia) {
+    const error = new Error('Microphone capture is not available in this browser.');
+    logError('capture-unavailable', error);
+    throw error;
+  }
   // Reuse the audio session during consecutive calibration captures. Some
   // mobile browsers can lose speaker output when the microphone is reopened.
   const context = getAudioContext();
@@ -58,7 +84,16 @@ export async function captureAcousticResponse(onProgress = () => {}) {
   try {
     await resumePromise;
     if (context.state !== 'running') await context.resume();
-    if (context.state !== 'running') throw new Error('The phone blocked speaker playback. Tap Record reference again after allowing sound for this site.');
+    if (context.state !== 'running') {
+      const error = new Error('The phone blocked speaker playback. Tap Record reference again after allowing sound for this site.');
+      logError('audio-context-blocked', error);
+      throw error;
+    }
+    log('capture-started', {
+      sampleRate: context.sampleRate,
+      tones: TEST_FREQUENCIES,
+      estimatedDurationSeconds: ((TONE_SETTLE_MS + TONE_SAMPLE_MS) * TEST_FREQUENCIES.length) / 1000,
+    });
     source = context.createMediaStreamSource(stream);
     analyser = context.createAnalyser();
     analyser.fftSize = FFT_SIZE;
@@ -94,17 +129,29 @@ export async function captureAcousticResponse(onProgress = () => {}) {
       }
       oscillator.stop();
       oscillator.disconnect();
-      fingerprint.push(readings.reduce((sum, level) => sum + level, 0) / Math.max(readings.length, 1));
+      const averageLevel = readings.reduce((sum, level) => sum + level, 0) / Math.max(readings.length, 1);
+      fingerprint.push(averageLevel);
+      log('tone-measured', { index: index + 1, frequency, readings: readings.length, averageDb: Number(averageLevel.toFixed(1)) });
     }
+    const averageDb = totalEnergy / Math.max(sampleCount, 1);
+    log('capture-complete', {
+      sampleCount,
+      averageDb: Number(averageDb.toFixed(1)),
+      fingerprint: fingerprint.map((value) => Number(value.toFixed(1))),
+    });
     return {
       status: 'recorded',
       fingerprint,
-      averageEnergy: Math.round(totalEnergy / Math.max(sampleCount, 1)),
+      averageEnergy: Math.round(averageDb),
       sampleCount,
       sweep: { frequencies: TEST_FREQUENCIES, durationSeconds: ((TONE_SETTLE_MS + TONE_SAMPLE_MS) * TEST_FREQUENCIES.length) / 1000 },
     };
+  } catch (error) {
+    logError('capture-failed', error);
+    throw error;
   } finally {
     gain?.disconnect(); source?.disconnect();
+    log('capture-cleanup');
     // Keep the stream available for the next reference capture on this page.
   }
 }

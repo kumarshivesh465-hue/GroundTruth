@@ -45,12 +45,16 @@ export const CalibrationScreen: React.FC<CalibrationScreenProps> = ({ onNavigate
   const recordReference = async () => {
     setError('');
     setIsCapturing(true);
+    console.log('[GroundTruth Acoustic] calibration-record-requested', { label });
     try {
       const response = await captureAcousticResponse(setMessage);
+      console.log('[GroundTruth Acoustic] calibration-response-received', { label, averageEnergy: response.averageEnergy, sampleCount: response.sampleCount, fingerprintBins: response.fingerprint.length });
       const next = await addCalibrationSample(label, response.fingerprint, notes);
       setCalibration(next);
+      console.log('[GroundTruth Acoustic] calibration-ui-updated', { label, savedCount: next[label === 'full' ? 'fullSamples' : 'emptySamples'].length, requiredSamples: REQUIRED_SAMPLES });
       setMessage(`${label === 'full' ? 'Full' : 'Empty'} reference ${next[label === 'full' ? 'fullSamples' : 'emptySamples'].length}/${REQUIRED_SAMPLES} saved. No audio was retained.`);
     } catch (captureError) {
+      console.error('[GroundTruth Acoustic] calibration-record-failed', captureError);
       setError(captureError instanceof Error ? captureError.message : 'The reference could not be recorded.');
       setMessage('Allow microphone access, reduce background noise, and try again.');
     } finally {
@@ -60,6 +64,7 @@ export const CalibrationScreen: React.FC<CalibrationScreenProps> = ({ onNavigate
 
   const handleReset = async () => {
     if (!window.confirm('Reset both Full and Empty references? Existing validation history will stay intact.')) return;
+    console.warn('[GroundTruth Acoustic] calibration-reset-requested');
     setCalibration(await resetCalibration());
     setMessage('Calibration reset. Record three Full and three Empty references again.');
     setError('');

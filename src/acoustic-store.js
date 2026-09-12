@@ -9,6 +9,10 @@ const REQUIRED_SAMPLES = 3;
 const CONFIDENCE_GAP = 0;
 const FINGERPRINT_VERSION = 6;
 const blankCalibration = () => ({ version: 6, fingerprintVersion: FINGERPRINT_VERSION, fullSamples: [], emptySamples: [], fullAverage: null, emptyAverage: null, createdAt: null, updatedAt: null, notes: '' });
+const LOG_PREFIX = '[GroundTruth Acoustic]';
+const log = (event, details = {}) => console.log(`${LOG_PREFIX} ${event}`, details);
+const warn = (event, details = {}) => console.warn(`${LOG_PREFIX} ${event}`, details);
+const logError = (event, error) => console.error(`${LOG_PREFIX} ${event}`, error);
 
 function isProfile(profile) {
   return Array.isArray(profile) && profile.length === ACOUSTIC_PROFILE_BINS && profile.every((value) => typeof value === 'number' && Number.isFinite(value));
@@ -17,7 +21,10 @@ export function hasRequiredSamples(calibration) {
   return Boolean(calibration) && calibration.fullSamples.length >= REQUIRED_SAMPLES && calibration.emptySamples.length >= REQUIRED_SAMPLES;
 }
 export function calibrationQuality(calibration) {
-  if (!hasRequiredSamples(calibration)) return { ready: false, weakestMargin: 0, message: 'Save three Full and three Empty references first.' };
+  if (!hasRequiredSamples(calibration)) {
+    log('calibration-incomplete', { fullSamples: calibration?.fullSamples?.length || 0, emptySamples: calibration?.emptySamples?.length || 0, requiredSamples: REQUIRED_SAMPLES });
+    return { ready: false, weakestMargin: 0, message: 'Save three Full and three Empty references first.' };
+  }
   const { fullSamples, emptySamples, fullAverage, emptyAverage } = calibration;
   const margins = [
     ...fullSamples.map((sample) => cosineSimilarity(sample, fullAverage) - cosineSimilarity(sample, emptyAverage)),
@@ -27,13 +34,15 @@ export function calibrationQuality(calibration) {
   // Each saved reference must be at least 1.5 cosine points closer to its own
   // class average. Overlapping references are not safe for live prediction.
   const ready = weakestMargin >= 0.015;
-  return {
+  const result = {
     ready,
     weakestMargin,
     message: ready
       ? 'Reference classes are sufficiently separated for a live comparison.'
       : 'Full and Empty references overlap. Reset and recapture with the phone fixed in one position and the same media volume.',
   };
+  (ready ? log : warn)('calibration-quality', { fullSamples: fullSamples.length, emptySamples: emptySamples.length, weakestMargin, ready });
+  return result;
 }
 function sanitizeCalibration(value) {
   // Fingerprint formats are intentionally versioned. Profiles from a different
@@ -62,20 +71,43 @@ async function write(key, value) {
   if (!database) { window.localStorage.setItem(FALLBACK_PREFIX + key, JSON.stringify(value)); return; }
   await new Promise((resolve, reject) => { const request = database.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).put(value, key); request.onsuccess = () => resolve(); request.onerror = () => reject(request.error); });
 }
-export async function getCalibration() { return sanitizeCalibration(await read(CALIBRATION_KEY, blankCalibration())); }
+export async function getCalibration() {
+  const calibration = sanitizeCalibration(await read(CALIBRATION_KEY, blankCalibration()));
+  log('calibration-loaded', { fingerprintVersion: calibration.fingerprintVersion, fullSamples: calibration.fullSamples.length, emptySamples: calibration.emptySamples.length });
+  return calibration;
+}
 export function isCalibrated(calibration) { return calibrationQuality(calibration).ready; }
 export async function addCalibrationSample(label, fingerprint, notes = '') {
-  if (!['full', 'empty'].includes(label) || !isProfile(fingerprint)) throw new Error('Invalid calibration sample.');
+  if (!['full', 'empty'].includes(label) || !isProfile(fingerprint)) {
+    const error = new Error('Invalid calibration sample.');
+    logError('calibration-sample-rejected', error);
+    throw error;
+  }
   const calibration = await getCalibration(); const samplesKey = label === 'full' ? 'fullSamples' : 'emptySamples';
-  if (calibration[samplesKey].length >= REQUIRED_SAMPLES) throw new Error(`All ${REQUIRED_SAMPLES} ${label} references are already saved. Reset calibration to replace them.`);
+  if (calibration[samplesKey].length >= REQUIRED_SAMPLES) {
+    const error = new Error(`All ${REQUIRED_SAMPLES} ${label} references are already saved. Reset calibration to replace them.`);
+    warn('calibration-sample-limit', { label, requiredSamples: REQUIRED_SAMPLES });
+    throw error;
+  }
   calibration[samplesKey] = [...calibration[samplesKey], fingerprint];
   calibration.fullAverage = averageFingerprint(calibration.fullSamples); calibration.emptyAverage = averageFingerprint(calibration.emptySamples);
   calibration.notes = notes.slice(0, 1000); calibration.createdAt ||= new Date().toISOString(); calibration.updatedAt = new Date().toISOString();
-  await write(CALIBRATION_KEY, calibration); return calibration;
+  await write(CALIBRATION_KEY, calibration);
+  log('calibration-sample-saved', { label, count: calibration[samplesKey].length, requiredSamples: REQUIRED_SAMPLES, fingerprintBins: fingerprint.length });
+  return calibration;
 }
-export async function resetCalibration() { const calibration = blankCalibration(); await write(CALIBRATION_KEY, calibration); return calibration; }
+export async function resetCalibration() {
+  const calibration = blankCalibration();
+  await write(CALIBRATION_KEY, calibration);
+  warn('calibration-reset', { fingerprintVersion: FINGERPRINT_VERSION });
+  return calibration;
+}
 export function classifyFingerprint(fingerprint, calibration) {
-  if (!isCalibrated(calibration) || !isProfile(fingerprint)) return { prediction: 'recheck', fullSimilarity: 0, emptySimilarity: 0, gap: 0, confidence: 0, calibrationMessage: calibrationQuality(calibration).message };
+  if (!isCalibrated(calibration) || !isProfile(fingerprint)) {
+    const calibrationMessage = calibrationQuality(calibration).message;
+    warn('classification-recheck', { fingerprintValid: isProfile(fingerprint), calibrationMessage });
+    return { prediction: 'recheck', fullSimilarity: 0, emptySimilarity: 0, gap: 0, confidence: 0, calibrationMessage };
+  }
   const fullSimilarity = cosineSimilarity(fingerprint, calibration.fullAverage);
   const emptySimilarity = cosineSimilarity(fingerprint, calibration.emptyAverage);
   const gap = Math.abs(fullSimilarity - emptySimilarity);
@@ -83,6 +115,7 @@ export function classifyFingerprint(fingerprint, calibration) {
   // insufficient calibration rather than a fixed similarity-gap rule.
   const prediction = fullSimilarity > emptySimilarity ? 'full' : 'empty';
   const confidence = Math.min(99, Math.max(1, Math.round(gap * 10000)));
+  log('classification-complete', { prediction, fullSimilarity, emptySimilarity, gap, confidence });
   return { prediction, fullSimilarity, emptySimilarity, gap, confidence };
 }
 export async function getAcousticHistory() { const history = await read(HISTORY_KEY, []); return Array.isArray(history) ? history.filter((item) => item && typeof item === 'object') : []; }
