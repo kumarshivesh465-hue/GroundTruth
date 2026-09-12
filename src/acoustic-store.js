@@ -7,8 +7,8 @@ const HISTORY_KEY = 'history';
 const FALLBACK_PREFIX = 'groundtruth-acoustic-v1:';
 const REQUIRED_SAMPLES = 3;
 const CONFIDENCE_GAP = 0;
-const FINGERPRINT_VERSION = 5;
-const blankCalibration = () => ({ version: 5, fingerprintVersion: FINGERPRINT_VERSION, fullSamples: [], emptySamples: [], fullAverage: null, emptyAverage: null, createdAt: null, updatedAt: null, notes: '' });
+const FINGERPRINT_VERSION = 6;
+const blankCalibration = () => ({ version: 6, fingerprintVersion: FINGERPRINT_VERSION, fullSamples: [], emptySamples: [], fullAverage: null, emptyAverage: null, createdAt: null, updatedAt: null, notes: '' });
 
 function isProfile(profile) {
   return Array.isArray(profile) && profile.length === ACOUSTIC_PROFILE_BINS && profile.every((value) => typeof value === 'number' && Number.isFinite(value));
