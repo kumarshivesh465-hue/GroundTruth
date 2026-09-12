@@ -4,6 +4,7 @@ import { TopAppBar } from '../components/TopAppBar';
 import { BottomNav } from '../components/BottomNav';
 import { CylinderGraphic } from '../components/CylinderGraphic';
 import { Camera, Mic, Activity, CheckCircle2, Play, Pause, ArrowRight, ShieldCheck, EyeOff } from 'lucide-react';
+import { reconcileSession } from '../../reconcile.js';
 
 interface ReviewEvidenceScreenProps {
   onNavigate: (screen: AppScreen) => void;
@@ -16,6 +17,7 @@ export const ReviewEvidenceScreen: React.FC<ReviewEvidenceScreenProps> = ({
   onNavigate,
   onOpenNotifications,
   session,
+  setSession,
 }) => {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [audioProgress, setAudioProgress] = useState(40);
@@ -39,19 +41,27 @@ export const ReviewEvidenceScreen: React.FC<ReviewEvidenceScreenProps> = ({
     }
   };
 
+  const reconcileCurrentSession = () => {
+    const result = reconcileSession(session);
+    const outcome = result.status === 'MATCH' ? 'match' : result.status === 'MISMATCH' ? 'mismatch' : 'clarity';
+    setSession((previous) => ({ ...previous, outcome, reconciliation: result }));
+    return { result, outcome };
+  };
+
+  const resultScreenFor = (outcome: VerificationSession['outcome']) => {
+    if (outcome === 'match') return 'result-match';
+    if (outcome === 'mismatch') return 'result-mismatch';
+    return 'result-clarity';
+  };
+
   const handleRunAiReview = () => {
+    reconcileCurrentSession();
     onNavigate('ai-analysis');
   };
 
   const handleLocalFallback = () => {
-    // Navigates directly based on session preset outcome
-    if (session.outcome === 'match') {
-      onNavigate('result-match');
-    } else if (session.outcome === 'mismatch') {
-      onNavigate('result-mismatch');
-    } else {
-      onNavigate('result-clarity');
-    }
+    const { outcome } = reconcileCurrentSession();
+    onNavigate(resultScreenFor(outcome));
   };
 
   return (

@@ -65,6 +65,12 @@ export interface VisionEvidence {
   imageDataUrl: string;
 }
 
+export interface ReconciliationResult {
+  status: 'MATCH' | 'MISMATCH' | 'RECHECK' | 'INCOMPLETE';
+  reason: string;
+  source: string;
+}
+
 export interface VerificationSession {
   selectedPreset: CylinderPreset;
   capturedImage: string | null;
@@ -87,6 +93,7 @@ export interface VerificationSession {
   resonanceStatus: 'Stable' | 'Calibrating' | 'Unstable';
   acousticPrediction?: 'full' | 'empty' | 'recheck';
   acousticConfidence?: number;
+  reconciliation?: ReconciliationResult;
   outcome: VerificationOutcome;
   customerName: string;
   cylinderUid: string;

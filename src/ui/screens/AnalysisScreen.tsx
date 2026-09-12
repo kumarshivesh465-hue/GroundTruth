@@ -15,6 +15,11 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
   session,
 }) => {
   const [progress, setProgress] = useState(4);
+  const resultScreen = session.outcome === 'match'
+    ? 'result-match'
+    : session.outcome === 'mismatch'
+      ? 'result-mismatch'
+      : 'result-clarity';
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -33,26 +38,14 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({
   useEffect(() => {
     if (progress >= 100) {
       const timeout = setTimeout(() => {
-        if (session.outcome === 'match') {
-          onNavigate('result-match');
-        } else if (session.outcome === 'mismatch') {
-          onNavigate('result-mismatch');
-        } else {
-          onNavigate('result-clarity');
-        }
+        onNavigate(resultScreen);
       }, 500);
       return () => clearTimeout(timeout);
     }
-  }, [progress, session.outcome, onNavigate]);
+  }, [progress, resultScreen, onNavigate]);
 
   const handleSkip = () => {
-    if (session.outcome === 'match') {
-      onNavigate('result-match');
-    } else if (session.outcome === 'mismatch') {
-      onNavigate('result-mismatch');
-    } else {
-      onNavigate('result-clarity');
-    }
+    onNavigate(resultScreen);
   };
 
   return (
