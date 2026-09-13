@@ -13,6 +13,9 @@ dist
 # Headless screen-audit screenshots
 /audit-shots
 
+# Dev-mode PWA artifacts
+/dev-dist
+
 # Internal strategy notes (kept local)
 NPU_MIGRATION_BRIEF.md
 
