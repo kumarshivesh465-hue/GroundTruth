@@ -7,11 +7,6 @@
 // calibrated level rather than an invented precise number.
 
 import { MIN_TAP_SNR_DB, TAP_BANDS, shapeSimilarity } from './tap.js';
-import {
-  REFERENCE_PROFILE_ACTIVE,
-  buildReferenceCalibration,
-  buildReferenceHistory,
-} from './datatap.js';
 
 const DB_NAME = 'groundtruth-tap';
 const STORE_NAME = 'offline-data';
@@ -145,7 +140,7 @@ export function averageFeatureSet(samples) {
 }
 
 export async function getTapCalibration() {
-  if (REFERENCE_PROFILE_ACTIVE) return sanitize(buildReferenceCalibration());
+
   const calibration = sanitize(await read(CALIBRATION_KEY, blankCalibration()));
   log('tap-calibration-loaded', { levels: Object.keys(calibration.levels), sampleCounts: Object.fromEntries(Object.entries(calibration.levels).map(([id, entry]) => [id, entry.samples.length])) });
   return calibration;
@@ -186,7 +181,7 @@ export function isTapCalibrated(calibration) {
 }
 
 export async function addTapSample(level, featureSet, notes = '') {
-  if (REFERENCE_PROFILE_ACTIVE) return getTapCalibration();
+
   if (!level?.id) throw new Error('Choose which known level you are recording.');
   if (!isFeatureSet(featureSet)) throw new Error('That tap capture was not usable and was not saved.');
   const calibration = await getTapCalibration();
@@ -217,7 +212,7 @@ export async function addTapSample(level, featureSet, notes = '') {
 }
 
 export async function resetTapCalibration() {
-  if (REFERENCE_PROFILE_ACTIVE) return getTapCalibration();
+
   const calibration = blankCalibration();
   await write(CALIBRATION_KEY, calibration);
   warn('tap-calibration-reset');
@@ -314,11 +309,10 @@ export function classifyTap(featureSet, calibration) {
 }
 
 export async function getTapHistory() {
-  if (REFERENCE_PROFILE_ACTIVE) return buildReferenceHistory();
+
   const history = await read(HISTORY_KEY, []);
   return Array.isArray(history) ? history.filter((entry) => entry && typeof entry === 'object') : [];
 }
-
 
 /**
  * Reshape saved tap results into the plain {createdAt, percent} series the
@@ -407,9 +401,7 @@ export function detectShapeDrift(history, vesselId = null, threshold = 0.6) {
 }
 
 export async function saveTapTest(result) {
-  if (REFERENCE_PROFILE_ACTIVE) {
-    return { ...result, id: `reference-${Date.now()}`, createdAt: new Date().toISOString(), actualLabel: null };
-  }
+
   const history = await getTapHistory();
   const entry = { id: crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`, createdAt: new Date().toISOString(), actualLabel: null, ...result };
   await write(HISTORY_KEY, [entry, ...history].slice(0, 100));
@@ -435,7 +427,7 @@ export function exportTapCalibration(calibration) {
 }
 
 export async function importTapCalibration(serialized) {
-  if (REFERENCE_PROFILE_ACTIVE) return getTapCalibration();
+
   let parsed;
   try { parsed = JSON.parse(serialized); } catch { throw new Error('That backup is not valid JSON.'); }
   if (parsed?.kind !== 'groundtruth-tap-calibration') throw new Error('This file is not a GroundTruth tap calibration backup.');

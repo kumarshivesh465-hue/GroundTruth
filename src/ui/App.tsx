@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AppScreen, VerificationSession } from "./types";
 import { DEFAULT_SESSION } from "./data/mockData";
 import { NotificationModal } from "./components/NotificationModal";
@@ -20,7 +20,6 @@ import { ResultMismatchScreen } from "./screens/ResultMismatchScreen";
 import { ResultClarityScreen } from "./screens/ResultClarityScreen";
 import { HistoryScreen } from "./screens/HistoryScreen";
 import { VesselTrendScreen } from "./screens/VesselTrendScreen";
-import { referenceSessionEvidence } from "../datatap.js";
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>(() => {
@@ -31,14 +30,6 @@ export default function App() {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isManualOpen, setIsManualOpen] = useState(false);
   const [session, setSession] = useState<VerificationSession>(DEFAULT_SESSION);
-
-  useEffect(() => {
-    let active = true;
-    void referenceSessionEvidence().then((evidence) => {
-      if (active && evidence) setSession((previous) => ({ ...previous, tapEvidence: evidence }));
-    }).catch(() => {});
-    return () => { active = false; };
-  }, []);
 
   const renderActiveScreen = () => {
     switch (currentScreen) {

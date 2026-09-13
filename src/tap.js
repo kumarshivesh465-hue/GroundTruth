@@ -14,8 +14,6 @@
 // - Microphone processing is requested off, because echo cancellation, noise
 //   suppression and automatic gain all alter the decay envelope.
 
-import { REFERENCE_PROFILE_ACTIVE, buildReferenceCapture } from './datatap.js';
-
 const LOG_PREFIX = '[GroundTruth Tap]';
 const log = (event, details = {}) => console.log(`${LOG_PREFIX} ${event}`, details);
 const logError = (event, error) => console.error(`${LOG_PREFIX} ${event}`, error);
@@ -262,10 +260,7 @@ export function analyzeTap(samples, sampleRate) {
 }
 
 export async function captureTapResponse(onProgress = () => {}, durationMs = TAP_WINDOW_MS) {
-  if (REFERENCE_PROFILE_ACTIVE) {
-    onProgress('Analysing the strike response on this device...');
-    return buildReferenceCapture();
-  }
+
   if (!navigator.mediaDevices?.getUserMedia) {
     const error = new Error('Microphone capture is not available in this browser.');
     logError('capture-unavailable', error);
