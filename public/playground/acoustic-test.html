@@ -1,47 +1,5 @@
 <!doctype html>
-<!--
-  STANDALONE LEARNING SCRIPT — not part of the app.
-  Tests the "active acoustic sensing" idea AND logs real trials so you get
-  a genuine accuracy number for the pitch deck — no manual tallying.
 
-  FIX (after real-device testing found ~36-41% accuracy — worse than
-  chance, and biased toward always guessing FULL): the original version
-  compared each capture to a SINGLE reference sample per class using raw
-  Euclidean distance. That distance is dominated by overall loudness —
-  how hard/consistently you pressed the phone against the container —
-  which varies more between captures than the actual full-vs-empty signal
-  does. Two changes fix this:
-    1. References are now the AVERAGE of several samples per class (3+
-       recommended), not just one — this cancels out per-capture noise.
-    2. Comparison now uses COSINE SIMILARITY (the angle between the two
-       frequency-response shapes) instead of raw distance — this is
-       naturally loudness-invariant, so it measures the SHAPE of the
-       response, not how loud the capture happened to be.
-
-  Method:
-    1. Hold the phone's speaker+mic against (or very close to) a sealed
-       container.
-    2. Tap "Play sweep + capture".
-    3. Build up your references: capture a KNOWN-FULL container 3+ times,
-       saving each as a "Full" sample; do the same for a KNOWN-EMPTY
-       container. More samples = a more robust average.
-    4. For every trial after that: capture, tell the tool what the
-       container ACTUALLY is, then tap "Log Trial".
-    5. Do at least 10 trials, mixing full and empty containers in random
-       order (don't always alternate — that can flatter the accuracy).
-    6. Tap "Copy results summary" and paste the output straight into the
-       "Quantifiable Outcomes" box in the deck.
-
-  Prior art check: this sweep-and-analyze-the-response technique matches
-  the FreqRespAnalysis method documented in the academic toolkit
-  yctung/LibAcousticSensing (github.com/yctung/LibAcousticSensing) —
-  confirmation the underlying idea is grounded, not invented from nothing.
-  Their toolkit itself isn't usable here: it's Java/MATLAB, targets native
-  Android/iOS apps, and requires a network-connected MATLAB server, which
-  is incompatible with this being a fully offline, in-browser PWA. This
-  file is an independent, from-scratch Web Audio API implementation of
-  the same general principle, not a port of their code.
--->
 <html>
 <head>
   <meta charset="utf-8" />

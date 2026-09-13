@@ -106,7 +106,7 @@ export function classifyFingerprint(fingerprint, calibration) {
   if (!isCalibrated(calibration) || !isProfile(fingerprint)) {
     const calibrationMessage = calibrationQuality(calibration).message;
     warn('classification-recheck', { fingerprintValid: isProfile(fingerprint), calibrationMessage });
-    return { prediction: 'recheck', fullSimilarity: 0, emptySimilarity: 0, gap: 0, confidence: 0, calibrationMessage };
+    return { prediction: 'recheck', fullSimilarity: 0, emptySimilarity: 0, gap: 0, confidence: 0, calibrationMessage, fillPercentage: null, fillEstimateMethod: null, withheldReason: calibrationMessage };
   }
   const fullSimilarity = cosineSimilarity(fingerprint, calibration.fullAverage);
   const emptySimilarity = cosineSimilarity(fingerprint, calibration.emptyAverage);
@@ -115,8 +115,16 @@ export function classifyFingerprint(fingerprint, calibration) {
   // insufficient calibration rather than a fixed similarity-gap rule.
   const prediction = fullSimilarity > emptySimilarity ? 'full' : 'empty';
   const confidence = Math.min(99, Math.max(1, Math.round(gap * 10000)));
-  log('classification-complete', { prediction, fullSimilarity, emptySimilarity, gap, confidence });
-  return { prediction, fullSimilarity, emptySimilarity, gap, confidence };
+  // Two-anchor interpolation: project the capture onto the line between the
+  // known-Full and known-Empty fingerprints and read off a relative position.
+  // This is a directional estimate between two local anchors, not a measurement.
+  const anchorSum = fullSimilarity + emptySimilarity;
+  const fillPercentage = anchorSum > 0
+    ? Math.max(0, Math.min(100, Math.round((100 * fullSimilarity) / anchorSum)))
+    : null;
+  const fillEstimateMethod = 'two-anchor interpolation (cosine, local Full/Empty references)';
+  log('classification-complete', { prediction, fullSimilarity, emptySimilarity, gap, confidence, fillPercentage });
+  return { prediction, fullSimilarity, emptySimilarity, gap, confidence, fillPercentage, fillEstimateMethod, withheldReason: null, method: fillEstimateMethod };
 }
 export async function getAcousticHistory() { const history = await read(HISTORY_KEY, []); return Array.isArray(history) ? history.filter((item) => item && typeof item === 'object') : []; }
 export async function saveAcousticTest(result) {
@@ -128,6 +136,25 @@ export async function setActualLabel(id, actualLabel) {
   const history = await getAcousticHistory(); const next = history.map((entry) => entry.id === id ? { ...entry, actualLabel } : entry); await write(HISTORY_KEY, next); return next.find((entry) => entry.id === id);
 }
 export function validationSummary(history) { const labelled = history.filter((entry) => ['full', 'empty'].includes(entry.actualLabel)); const correct = labelled.filter((entry) => entry.prediction === entry.actualLabel).length; return { labelled: labelled.length, correct, accuracy: labelled.length ? Math.round((correct / labelled.length) * 100) : null }; }
+
+// Signal-level guardrail. A capture that is effectively silent, or loud enough
+// to clip, cannot support a percentage claim even when the calibration is sound.
+// Thresholds are deliberately wide: they reject unusable captures, not noisy ones.
+export const MIN_CAPTURE_DB = -70;
+export const MAX_CAPTURE_DB = -14;
+export function guardAcousticEstimate(comparison, averageEnergy) {
+  if (!comparison || comparison.fillPercentage === null) return comparison;
+  const level = Number(averageEnergy);
+  if (!Number.isFinite(level) || level < MIN_CAPTURE_DB) {
+    warn('estimate-withheld-weak-signal', { averageEnergy, minCaptureDb: MIN_CAPTURE_DB });
+    return { ...comparison, fillPercentage: null, fillEstimateMethod: null, withheldReason: 'The captured signal was too weak to estimate a fill level. Move the phone closer to the container and run the sweep again.' };
+  }
+  if (level > MAX_CAPTURE_DB) {
+    warn('estimate-withheld-clipping', { averageEnergy, maxCaptureDb: MAX_CAPTURE_DB });
+    return { ...comparison, fillPercentage: null, fillEstimateMethod: null, withheldReason: 'The captured signal was loud enough to clip, so the response shape is unreliable. Lower the media volume and run the sweep again.' };
+  }
+  return comparison;
+}
 export async function exportCalibration() { return JSON.stringify({ kind: 'groundtruth-acoustic-calibration', exportedAt: new Date().toISOString(), calibration: await getCalibration() }, null, 2); }
 export async function importCalibration(serialized) {
   let parsed; try { parsed = JSON.parse(serialized); } catch { throw new Error('That backup is not valid JSON.'); }

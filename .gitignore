@@ -10,6 +10,12 @@ dist
 # Logs
 *.log
 
+# Headless screen-audit screenshots
+/audit-shots
+
+# Internal strategy notes (kept local)
+NPU_MIGRATION_BRIEF.md
+
 # OS / editor junk
 .DS_Store
 Thumbs.db

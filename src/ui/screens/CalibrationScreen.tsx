@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AppScreen } from '../types';
 import { TopAppBar } from '../components/TopAppBar';
 import { BottomNav } from '../components/BottomNav';
-import { ArchiveRestore, CheckCircle2, Circle, Download, Info, Mic, RotateCcw, Upload, Waves } from 'lucide-react';
+import { ArchiveRestore, CheckCircle2, Circle, Download, FlaskConical, Info, Mic, RotateCcw, Upload, Waves } from 'lucide-react';
 import { captureAcousticResponse } from '../../acoustic.js';
 import {
   REQUIRED_SAMPLES,
@@ -155,6 +155,15 @@ export const CalibrationScreen: React.FC<CalibrationScreenProps> = ({ onNavigate
           {history.length > 0 && <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-3">{history.slice(0, 5).map((entry) => <div key={entry.id} className="flex items-center justify-between text-[11px]"><span className="font-mono text-slate-500">{new Date(entry.createdAt).toLocaleDateString()}</span><span className="font-bold text-slate-800 uppercase">{entry.prediction}</span><span className={entry.actualLabel ? 'text-slate-600' : 'text-slate-400'}>{entry.actualLabel ? `actual ${entry.actualLabel}` : 'unlabelled'}</span></div>)}</div>}
         </div>
         <div className="flex gap-2 text-[11px] text-slate-500 leading-snug"><Info className="w-4 h-4 shrink-0" />Live checks return Recheck when the two saved profiles are too close to distinguish reliably.</div>
+
+        <button
+          id="open-dataset-capture-btn"
+          onClick={() => onNavigate('dataset-capture')}
+          className="w-full h-11 rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-700 flex items-center justify-center gap-2 cursor-pointer"
+        >
+          <FlaskConical className="w-4 h-4 text-slate-500" />
+          Open labelled dataset capture
+        </button>
       </div>
       <BottomNav currentScreen="home" onNavigate={onNavigate} />
     </div>

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppScreen, VerificationSession } from '../types';
 import { TopAppBar } from '../components/TopAppBar';
 import { BottomNav } from '../components/BottomNav';
 import { SafeGasMatchLogo } from '../components/ResultLogos';
 import { VisionEvidenceCard } from '../components/VisionEvidenceCard';
+import { triggerMatchFeedback } from '../../feedback.js';
 import {
   CheckCircle2,
   ShieldCheck,
@@ -31,9 +32,24 @@ export const ResultMatchScreen: React.FC<ResultMatchScreenProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
+  // Vibration + flash + chime, once, when this verdict first appears.
+  useEffect(() => { triggerMatchFeedback(); }, []);
+
+  // The tap screen is the primary method; the tone-sweep estimate is the
+  // legacy path. Prefer whichever produced a real number.
+  const fillPercentage = typeof session.tapEvidence?.estimatePercent === 'number'
+    ? session.tapEvidence.estimatePercent
+    : session.acousticEvidence?.fillPercentage;
+  const fillMethod = session.tapEvidence?.prediction === 'level'
+    ? 'nearest calibrated tap reference'
+    : session.acousticEvidence?.fillEstimateMethod || null;
+  const liveConfidence = typeof session.acousticConfidence === 'number'
+    ? `${session.acousticConfidence}%`
+    : `${Math.round((session.acousticSignalQuality || 0))}%`;
 
   const handleShare = () => {
-    const text = `GroundTruth Verified Cylinder: ${session.cylinderUid} | Digital Receipt: ${session.digitalReceiptId} | Confidence: 99.8%`;
+    const fillText = typeof fillPercentage === 'number' ? `${fillPercentage}% estimated fill` : 'no fill estimate';
+    const text = `GroundTruth Verified Cylinder: ${session.cylinderUid} | Digital Receipt: ${session.digitalReceiptId} | ${fillText} | Confidence: ${liveConfidence}`;
     if (navigator.clipboard) {
       navigator.clipboard.writeText(text);
       setCopied(true);
@@ -73,7 +89,7 @@ export const ResultMatchScreen: React.FC<ResultMatchScreenProps> = ({
           </h2>
 
           <p className="text-[13px] text-slate-600 max-w-xs leading-relaxed">
-            The captured acoustic and visual signals are in agreement.
+            The tap screen and the recorded signals are in agreement.
           </p>
         </div>
 
@@ -122,10 +138,21 @@ export const ResultMatchScreen: React.FC<ResultMatchScreenProps> = ({
             <div className="py-2.5 flex items-center justify-between last:pb-1">
               <div className="flex items-center gap-2 text-slate-500 font-medium">
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <span>AI Confidence</span>
+                <span>Screen separation</span>
               </div>
               <span className="font-bold text-slate-900 font-mono text-[13px]">
-                99.8%
+                {liveConfidence}
+              </span>
+            </div>
+
+            {/* Estimated fill level: directional, never presented as a measurement. */}
+            <div className="py-2.5 flex items-center justify-between last:pb-1">
+              <div className="flex items-center gap-2 text-slate-500 font-medium">
+                <ShieldCheck className="w-4 h-4 text-teal-600" />
+                <span>Estimated fill level</span>
+              </div>
+              <span className="font-bold text-slate-900 font-mono text-[13px]">
+                {typeof fillPercentage === 'number' ? `${fillPercentage}%` : 'Not available'}
               </span>
             </div>
           </div>
@@ -133,6 +160,16 @@ export const ResultMatchScreen: React.FC<ResultMatchScreenProps> = ({
 
         {/* Live visual detection captured on-device */}
         <VisionEvidenceCard evidence={session.visionEvidence} compact />
+
+        {/* Limitation statement shown on every match report. */}
+        <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-start gap-2.5">
+          <ShieldCheck className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
+          <p className="text-[11.5px] text-slate-600 leading-snug">
+            This report records evidence captured on this device. The fill figure is a relative estimate
+            between two locally calibrated anchors - not a weight, a certified volume, or a regulated
+            measurement - and it does not certify the cylinder seal or its gas quantity.
+          </p>
+        </div>
 
         {/* DIGITAL RECEIPT Card matching Image 6 */}
         <div className="p-3.5 rounded-2xl bg-[#F8FAFC] border border-slate-200/90 shadow-2xs space-y-3">

@@ -3,7 +3,7 @@ import { AppScreen, VerificationSession } from '../types';
 import { TopAppBar } from '../components/TopAppBar';
 import { BottomNav } from '../components/BottomNav';
 import { CylinderGraphic } from '../components/CylinderGraphic';
-import { Camera, Mic, Activity, CheckCircle2, Play, Pause, ArrowRight, ShieldCheck, EyeOff } from 'lucide-react';
+import { Camera, Mic, Activity, AlertTriangle, CheckCircle2, Play, Pause, ArrowRight, ShieldCheck, EyeOff } from 'lucide-react';
 import { reconcileSession } from '../../reconcile.js';
 
 interface ReviewEvidenceScreenProps {
@@ -23,6 +23,12 @@ export const ReviewEvidenceScreen: React.FC<ReviewEvidenceScreenProps> = ({
   const [audioProgress, setAudioProgress] = useState(40);
 
   const visualUnclear = session.visionEvidence?.status === 'unclear';
+  const estimate = session.acousticEvidence;
+  const acousticSummary = !estimate
+    ? 'No acoustic capture yet'
+    : estimate.fillPercentage === null
+      ? 'Estimate withheld - recheck required'
+      : `${estimate.fillPercentage}% estimated fill`;
 
   const toggleAudioPlayback = () => {
     setIsPlayingAudio(!isPlayingAudio);
@@ -69,7 +75,7 @@ export const ReviewEvidenceScreen: React.FC<ReviewEvidenceScreenProps> = ({
       <TopAppBar
         title="Review Evidence"
         showBack={true}
-        onBack={() => onNavigate('acoustic-check')}
+        onBack={() => onNavigate(session.tapEvidence ? 'tap-check' : 'acoustic-check')}
         showBell={true}
         hasUnreadNotifications={true}
         onBellClick={onOpenNotifications}
@@ -201,6 +207,44 @@ export const ReviewEvidenceScreen: React.FC<ReviewEvidenceScreenProps> = ({
           </button>
         </div>
 
+        {/* Tap evidence card - the primary method, shown before the legacy sweep */}
+        <div id="tap-evidence-card" className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-slate-800 text-sm font-bold font-mono">
+              <Activity className="w-4 h-4 text-[#00A3B4]" />
+              <span>tap screen</span>
+            </div>
+            <div className={`flex items-center gap-1 text-[11px] font-bold font-mono px-2 py-0.5 rounded-full border ${session.tapEvidence?.prediction === 'level' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-amber-700 bg-amber-50 border-amber-200'}`}>
+              {session.tapEvidence?.prediction === 'level' ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />}
+              <span>{session.tapEvidence?.prediction === 'level' ? 'SCREENED' : 'RECHECK'}</span>
+            </div>
+          </div>
+          {session.tapEvidence ? (
+            <div className="grid grid-cols-2 gap-2 text-[12px]">
+              <div>
+                <span className="block text-[10px] font-bold text-slate-600 font-mono">NEAREST LEVEL</span>
+                <span className="font-bold text-slate-900">{session.tapEvidence.levelName || 'Undecided'}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold text-slate-600 font-mono">SCREENED FILL</span>
+                <span className="font-bold text-slate-800">{typeof session.tapEvidence.estimatePercent === 'number' ? `~${session.tapEvidence.estimatePercent}%` : 'Withheld'}</span>
+              </div>
+            </div>
+          ) : (
+            <p className="text-[12px] text-amber-900 leading-snug">No tap screen has been run for this session yet.</p>
+          )}
+          <p className="text-[10px] text-slate-500 leading-snug">
+            {session.tapEvidence?.message || 'Run the tap check to screen this vessel.'} A nearest-reference screen against your own
+            calibration, not a measurement.
+          </p>
+          <button
+            onClick={() => onNavigate('tap-check')}
+            className="w-full py-2.5 rounded-xl border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors cursor-pointer"
+          >
+            Retake Tap Screen
+          </button>
+        </div>
+
         {/* 3. Acoustic Card matching Image 9 */}
         <div className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
           <div className="flex items-center justify-between">
@@ -208,11 +252,25 @@ export const ReviewEvidenceScreen: React.FC<ReviewEvidenceScreenProps> = ({
               <Activity className="w-4 h-4 text-[#00A3B4]" />
               <span>acoustic</span>
             </div>
-            <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 font-mono bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              <span>SUCCESS</span>
+            <div className={`flex items-center gap-1 text-[11px] font-bold font-mono px-2 py-0.5 rounded-full border ${estimate?.fillPercentage ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-amber-700 bg-amber-50 border-amber-200'}`}>
+              {estimate?.fillPercentage ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />}
+              <span>{estimate?.fillPercentage ? 'ESTIMATE READY' : 'RECHECK'}</span>
             </div>
           </div>
+
+          <div className="grid grid-cols-2 gap-2 text-[12px]">
+            <div>
+              <span className="block text-[10px] font-bold text-slate-600 font-mono">ESTIMATED FILL</span>
+              <span className="font-bold text-slate-900">{typeof estimate?.fillPercentage === 'number' ? `${estimate.fillPercentage}%` : 'Withheld'}</span>
+            </div>
+            <div>
+              <span className="block text-[10px] font-bold text-slate-600 font-mono">FULL / EMPTY REF</span>
+              <span className="font-bold text-slate-800">
+                {estimate ? `${(estimate.fullSimilarity * 100).toFixed(1)}% / ${(estimate.emptySimilarity * 100).toFixed(1)}%` : '-'}
+              </span>
+            </div>
+          </div>
+          <p className="text-[10px] text-slate-500 leading-snug">{acousticSummary}. Interpolated between two local calibration anchors - not a weight or certified volume.</p>
 
           {/* Waveform graphic container */}
           <div className="w-full h-16 rounded-xl bg-gradient-to-r from-slate-100 via-sky-50 to-slate-100 border border-slate-200/80 flex items-center justify-center px-4 relative overflow-hidden">

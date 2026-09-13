@@ -144,6 +144,7 @@ export async function captureAcousticResponse(onProgress = () => {}) {
       fingerprint,
       averageEnergy: Math.round(averageDb),
       sampleCount,
+      sampleRate: context.sampleRate,
       sweep: { frequencies: TEST_FREQUENCIES, durationSeconds: ((TONE_SETTLE_MS + TONE_SAMPLE_MS) * TEST_FREQUENCIES.length) / 1000 },
     };
   } catch (error) {
@@ -173,3 +174,5 @@ export function averageFingerprint(samples) {
 }
 
 export const ACOUSTIC_PROFILE_BINS = PROFILE_BINS;
+// Exported so the dataset tooling can label each bin with its tone frequency.
+export const ACOUSTIC_TEST_FREQUENCIES = TEST_FREQUENCIES;

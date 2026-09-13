@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppScreen, VerificationSession } from '../types';
 import { TopAppBar } from '../components/TopAppBar';
 import { BottomNav } from '../components/BottomNav';
 import { EvidenceConflictLogo } from '../components/ResultLogos';
 import { VisionEvidenceCard } from '../components/VisionEvidenceCard';
+import { buildProviderEmail, PROVIDERS, providerLabel } from '../../provider-email';
+import { triggerMismatchFeedback } from '../../feedback.js';
 import {
   AlertCircle,
   RotateCcw,
@@ -11,6 +13,7 @@ import {
   ChevronRight,
   Info,
   Check,
+  Mail,
 } from 'lucide-react';
 
 interface ResultMismatchScreenProps {
@@ -23,6 +26,11 @@ export const ResultMismatchScreen: React.FC<ResultMismatchScreenProps> = ({
   session,
 }) => {
   const [reportSaved, setReportSaved] = useState(false);
+  const [providerId, setProviderId] = useState(session.provider?.id || 'bharatgas');
+  const [otherLabel, setOtherLabel] = useState(session.provider?.otherLabel || '');
+  const [recipientEmail, setRecipientEmail] = useState(session.provider?.recipientEmail || '');
+  // Vibration + flash + alarm tone, once, when this verdict first appears.
+  useEffect(() => { triggerMismatchFeedback(); }, []);
 
   // Live on-device detection label when available; simulated brand otherwise.
   const visualDetected = session.visionEvidence?.label
@@ -33,9 +41,25 @@ export const ResultMismatchScreen: React.FC<ResultMismatchScreenProps> = ({
       '%'
     : session.selectedPreset.detectedBrand;
 
+  // The tap screen is the primary method. Prefer its screened fill, falling
+  // back to the legacy tone-sweep estimate only when no tap result exists.
+  const tapFill = session.tapEvidence?.estimatePercent;
+  const fillPercentage = typeof tapFill === 'number' ? tapFill : session.acousticEvidence?.fillPercentage;
+  const fillMethod = session.tapEvidence?.prediction === 'level'
+    ? 'nearest calibrated tap reference'
+    : session.acousticEvidence?.fillEstimateMethod || null;
+
   const handleSaveReport = () => {
     setReportSaved(true);
     setTimeout(() => setReportSaved(false), 2000);
+  };
+
+  const providerSelection = { id: providerId, otherLabel, recipientEmail };
+  const handleDraftEmail = () => {
+    // Opens the device mail client with a prepared draft. Nothing is sent by
+    // this app: there is no SMTP or backend service anywhere in the project.
+    const draft = buildProviderEmail(session, providerSelection);
+    window.location.href = draft.mailto;
   };
 
   return (
@@ -104,13 +128,24 @@ export const ResultMismatchScreen: React.FC<ResultMismatchScreenProps> = ({
               <div className="grid grid-cols-2 gap-2 text-[12px]">
                 <div>
                   <span className="block text-[10px] font-bold text-slate-600 font-mono">DETECTED</span>
-                  <span className="font-bold text-[#B91C1C]">82% Resonance</span>
+                  <span className="font-bold text-[#B91C1C]">
+                    {typeof fillPercentage !== 'number'
+                      ? 'No estimate'
+                      : `${fillPercentage}% estimated`}
+                  </span>
                 </div>
                 <div>
                   <span className="block text-[10px] font-bold text-slate-600 font-mono">EXPECTED</span>
-                  <span className="font-bold text-emerald-700">&gt; 95% Match</span>
+                  <span className="font-bold text-emerald-700">
+                    {session.transcript?.trim() || 'Claim not stated'}
+                  </span>
                 </div>
               </div>
+              <p className="text-[10px] text-slate-500 leading-snug pt-0.5">
+                {session.acousticEvidence?.fillEstimateMethod
+                  ? `Method: ${session.acousticEvidence.fillEstimateMethod}. Interpolated between two local calibration anchors - not a weight, certified volume, or precise measurement.`
+                  : 'Estimated fill level is interpolated between two local calibration anchors. It is not a weight, a certified volume, or a precise measurement.'}
+              </p>
             </div>
 
             {/* Seal Integrity */}
@@ -134,6 +169,85 @@ export const ResultMismatchScreen: React.FC<ResultMismatchScreenProps> = ({
 
         {/* Live visual detection captured on-device */}
         <VisionEvidenceCard evidence={session.visionEvidence} compact />
+
+        {/* Limitation statement: deliberately shown on every mismatch report. */}
+        <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-2.5">
+          <Info className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+          <p className="text-[11.5px] text-amber-900 leading-snug">
+            This report records evidence captured on this device. The fill figure is a relative estimate
+            between two locally calibrated anchors, not a regulated measurement, and it is not proof of
+            tampering or of gas quantity. Confirm with a licensed weighing method before acting.
+          </p>
+        </div>
+
+        {/* Provider report: user reviews and sends the draft themselves. */}
+        <div className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-800 font-mono">
+            <Mail className="w-4 h-4 text-[#00A3B4]" />
+            <span>DRAFT EMAIL TO PROVIDER</span>
+          </div>
+
+          <div className="space-y-1">
+            <label htmlFor="provider-select" className="block text-[10px] font-bold text-slate-600 font-mono">
+              PROVIDER
+            </label>
+            <select
+              id="provider-select"
+              value={providerId}
+              onChange={(event) => setProviderId(event.target.value as typeof providerId)}
+              className="w-full h-10 rounded-xl border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700"
+            >
+              {PROVIDERS.map((provider) => (
+                <option key={provider.id} value={provider.id}>{provider.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {providerId === 'other' && (
+            <div className="space-y-1">
+              <label htmlFor="provider-other" className="block text-[10px] font-bold text-slate-600 font-mono">
+                PROVIDER NAME
+              </label>
+              <input
+                id="provider-other"
+                value={otherLabel}
+                onChange={(event) => setOtherLabel(event.target.value)}
+                placeholder="Type the distributor name"
+                className="w-full h-10 rounded-xl border border-slate-300 bg-white px-2.5 text-xs text-slate-700"
+              />
+            </div>
+          )}
+
+          <div className="space-y-1">
+            <label htmlFor="provider-email" className="block text-[10px] font-bold text-slate-600 font-mono">
+              RECIPIENT EMAIL (OPTIONAL)
+            </label>
+            <input
+              id="provider-email"
+              type="email"
+              inputMode="email"
+              value={recipientEmail}
+              onChange={(event) => setRecipientEmail(event.target.value)}
+              placeholder="Leave blank to choose the recipient in your mail app"
+              className="w-full h-10 rounded-xl border border-slate-300 bg-white px-2.5 text-xs text-slate-700"
+            />
+            <p className="text-[10px] text-slate-500 leading-snug">
+              This app has no company address book and never guesses one. Add an address only if you have a verified one.
+            </p>
+          </div>
+
+          <button
+            id="draft-provider-email-btn"
+            onClick={handleDraftEmail}
+            className="w-full h-11 rounded-xl bg-[#00A3B4] hover:bg-[#008D9B] text-white text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+          >
+            <Mail className="w-4 h-4" />
+            <span>Draft email to {providerLabel(providerSelection)}</span>
+          </button>
+          <p className="text-[10px] text-slate-500 leading-snug">
+            Opens a prepared draft in your mail app. You review, edit, and send it yourself - nothing is sent automatically.
+          </p>
+        </div>
 
         {/* RECOMMENDED ACTIONS matching Image 7 */}
         <div className="space-y-2 pt-1">

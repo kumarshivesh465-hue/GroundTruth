@@ -21,7 +21,8 @@ if (!chromePath) {
 }
 
 const SCREENS = [
-  'home', 'capture', 'record-claim', 'acoustic-check', 'calibration', 'review-evidence',
+  'home', 'capture', 'record-claim', 'acoustic-check', 'calibration', 'dataset-capture',
+  'tap-check', 'tap-calibration', 'vessel-trend', 'review-evidence',
   'ai-analysis', 'result-match', 'result-mismatch', 'result-clarity', 'history',
 ];
 const BASE = process.env.AUDIT_URL || 'http://localhost:4173/';

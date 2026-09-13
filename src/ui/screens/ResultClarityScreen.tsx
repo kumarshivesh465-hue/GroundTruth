@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { AppScreen, VerificationSession } from '../types';
 import { TopAppBar } from '../components/TopAppBar';
 import { BottomNav } from '../components/BottomNav';
 import { ClarityLoopGraphic } from '../components/ResultLogos';
 import { VisionEvidenceCard } from '../components/VisionEvidenceCard';
+import { triggerRecheckFeedback } from '../../feedback.js';
 import {
   AlertCircle,
   Camera,
@@ -27,6 +28,8 @@ export const ResultClarityScreen: React.FC<ResultClarityScreenProps> = ({
   onOpenManual,
   session,
 }) => {
+  // Recheck is not a verdict, so it gets a short neutral pulse and no alarm tone.
+  useEffect(() => { triggerRecheckFeedback(); }, []);
   return (
     <div className="flex-1 flex flex-col bg-white select-none">
       <TopAppBar

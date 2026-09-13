@@ -158,9 +158,16 @@ export const DEFAULT_SESSION: VerificationSession = {
   acousticSignalQuality: 98,
   ambientNoiseDb: 12.4,
   resonanceStatus: 'Stable',
+  acousticEvidence: null,
   outcome: 'match',
   customerName: 'Anand Sharma',
   cylinderUid: 'IND-LPG-499281-B',
   digitalReceiptId: 'GT-8829-XQ',
+  vesselId: 'IND-LPG-499281-B',
+  provider: {
+    id: 'bharatgas',
+    otherLabel: '',
+    recipientEmail: '',
+  },
   timestamp: 'OCT 24, 2023 · 14:32:08 PM',
 };

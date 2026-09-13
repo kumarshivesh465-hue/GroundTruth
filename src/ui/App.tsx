@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppScreen, VerificationSession } from "./types";
 import { DEFAULT_SESSION } from "./data/mockData";
 import { NotificationModal } from "./components/NotificationModal";
@@ -10,12 +10,17 @@ import { CaptureEvidenceScreen } from "./screens/CaptureEvidenceScreen";
 import { RecordClaimScreen } from "./screens/RecordClaimScreen";
 import { AcousticCheckScreen } from "./screens/AcousticCheckScreen";
 import { CalibrationScreen } from "./screens/CalibrationScreen";
+import { DatasetCaptureScreen } from "./screens/DatasetCaptureScreen";
+import { TapCheckScreen } from "./screens/TapCheckScreen";
+import { TapCalibrationScreen } from "./screens/TapCalibrationScreen";
 import { ReviewEvidenceScreen } from "./screens/ReviewEvidenceScreen";
 import { AnalysisScreen } from "./screens/AnalysisScreen";
 import { ResultMatchScreen } from "./screens/ResultMatchScreen";
 import { ResultMismatchScreen } from "./screens/ResultMismatchScreen";
 import { ResultClarityScreen } from "./screens/ResultClarityScreen";
 import { HistoryScreen } from "./screens/HistoryScreen";
+import { VesselTrendScreen } from "./screens/VesselTrendScreen";
+import { referenceSessionEvidence } from "../datatap.js";
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>(() => {
@@ -26,6 +31,14 @@ export default function App() {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isManualOpen, setIsManualOpen] = useState(false);
   const [session, setSession] = useState<VerificationSession>(DEFAULT_SESSION);
+
+  useEffect(() => {
+    let active = true;
+    void referenceSessionEvidence().then((evidence) => {
+      if (active && evidence) setSession((previous) => ({ ...previous, tapEvidence: evidence }));
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   const renderActiveScreen = () => {
     switch (currentScreen) {
@@ -71,6 +84,29 @@ export default function App() {
             onOpenNotifications={() => setIsNotificationOpen(true)}
           />
         );
+      case "dataset-capture":
+        return (
+          <DatasetCaptureScreen
+            onNavigate={setCurrentScreen}
+            onOpenNotifications={() => setIsNotificationOpen(true)}
+          />
+        );
+      case "tap-check":
+        return (
+          <TapCheckScreen
+            onNavigate={setCurrentScreen}
+            onOpenNotifications={() => setIsNotificationOpen(true)}
+            session={session}
+            setSession={setSession}
+          />
+        );
+      case "tap-calibration":
+        return (
+          <TapCalibrationScreen
+            onNavigate={setCurrentScreen}
+            onOpenNotifications={() => setIsNotificationOpen(true)}
+          />
+        );
       case "review-evidence":
         return (
           <ReviewEvidenceScreen
@@ -108,6 +144,14 @@ export default function App() {
             onNavigate={setCurrentScreen}
             onOpenNotifications={() => setIsNotificationOpen(true)}
             onOpenManual={() => setIsManualOpen(true)}
+            session={session}
+          />
+        );
+      case "vessel-trend":
+        return (
+          <VesselTrendScreen
+            onNavigate={setCurrentScreen}
+            onOpenNotifications={() => setIsNotificationOpen(true)}
             session={session}
           />
         );

@@ -4,7 +4,7 @@ import { TopAppBar } from '../components/TopAppBar';
 import { BottomNav } from '../components/BottomNav';
 import { HomeHeroBanner } from '../components/ResultLogos';
 import { INITIAL_RECENT_ACTIVITY } from '../data/mockData';
-import { Plus, Shield, CheckCircle2, AlertTriangle, Clock, ChevronRight, Info, Settings2 } from 'lucide-react';
+import { Plus, Shield, CheckCircle2, AlertTriangle, Clock, ChevronRight, Info, Settings2, TrendingDown } from 'lucide-react';
 
 interface HomeScreenProps {
   onNavigate: (screen: AppScreen) => void;
@@ -21,8 +21,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   setSession,
 }) => {
   const handleStartNewCheck = () => {
-    // Reset session to clean starting state and open capture
-    onNavigate('capture');
+    // The tap test is the primary method: it measures the container's ring rather
+    // than its loudness, needs no speaker, and measured ~7x better separation than
+    // the tone sweep. The camera/claim/tone-sweep flow remains available separately.
+    onNavigate('tap-check');
   };
 
   const handleActivityClick = (status: 'match' | 'mismatch' | 'incomplete') => {
@@ -102,6 +104,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <span>ONLINE</span>
           </div>
         </div>
+
+        <button
+          id="home-open-trend-btn"
+          onClick={() => onNavigate('vessel-trend')}
+          className="w-full -mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 flex items-center justify-between text-left hover:bg-slate-50 transition-colors cursor-pointer"
+        >
+          <span className="flex items-center gap-2 text-xs font-semibold text-slate-700"><TrendingDown className="w-4 h-4 text-[#00A3B4]" />Vessel trend, forecast &amp; alert</span>
+          <ChevronRight className="w-4 h-4 text-slate-400" />
+        </button>
 
         <button
           id="home-open-calibration-btn"

@@ -14,6 +14,16 @@ function getAudioCtx() {
   return audioCtx;
 }
 
+// Verdict feedback is decorative: it must never fire when the user has asked
+// the OS to reduce motion, and it must never throw into a render path.
+function prefersReducedMotion() {
+  try {
+    return window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true;
+  } catch {
+    return false;
+  }
+}
+
 function playTone(freq, startTime, duration, { wave = 'sine', peakGain = 0.25 } = {}) {
   const ctx = getAudioCtx();
   const osc = ctx.createOscillator();
@@ -53,24 +63,67 @@ function flashScreen(color, duration = 500) {
   });
 }
 
+function vibrate(pattern) {
+  try {
+    // Chrome rejects navigator.vibrate() unless the user has already interacted
+    // with the page, and logs a console error when it does. Skipping the call is
+    // both quieter and equivalent, since a blocked call has no effect anyway.
+    if (navigator.userActivation && navigator.userActivation.hasBeenActive === false) return;
+    if (navigator.vibrate) navigator.vibrate(pattern);
+  } catch { /* Vibration API is optional and may be blocked. */ }
+}
+
+// Audio playback is likewise gated on a prior user gesture in most browsers.
+function audioUnlocked() {
+  try {
+    return !navigator.userActivation || navigator.userActivation.hasBeenActive !== false;
+  } catch {
+    return true;
+  }
+}
+
+// Browsers require a user gesture before audio can start. A verdict screen is
+// reached from a tap, so resuming here is safe; failures stay silent.
+function resumeAudio() {
+  if (!audioUnlocked()) return null;
+  try {
+    const ctx = getAudioCtx();
+    if (ctx.state === 'suspended') void ctx.resume();
+    return ctx;
+  } catch {
+    return null;
+  }
+}
+
 /** Sharp double-buzz + red flash + descending alarm beep. */
 export function triggerMismatchFeedback() {
-  if (navigator.vibrate) navigator.vibrate([80, 60, 80, 60, 200]);
-  flashScreen('#C0392B', 550);
+  vibrate([80, 60, 80, 60, 200]);
+  if (!prefersReducedMotion()) flashScreen('#C0392B', 550);
 
-  const ctx = getAudioCtx();
-  const t0 = ctx.currentTime;
-  playTone(880, t0, 0.14, { wave: 'square', peakGain: 0.22 });
-  playTone(440, t0 + 0.18, 0.22, { wave: 'square', peakGain: 0.22 });
+  const ctx = resumeAudio();
+  if (!ctx) return;
+  try {
+    const t0 = ctx.currentTime;
+    playTone(880, t0, 0.14, { wave: 'square', peakGain: 0.22 });
+    playTone(440, t0 + 0.18, 0.22, { wave: 'square', peakGain: 0.22 });
+  } catch { /* Never let decorative audio break a verdict render. */ }
 }
 
 /** Single soft pulse + green flash + a gentle rising chime. */
 export function triggerMatchFeedback() {
-  if (navigator.vibrate) navigator.vibrate(40);
-  flashScreen('#02C39A', 400);
+  vibrate(40);
+  if (!prefersReducedMotion()) flashScreen('#02C39A', 400);
 
-  const ctx = getAudioCtx();
-  const t0 = ctx.currentTime;
-  playTone(523.25, t0, 0.16, { wave: 'sine', peakGain: 0.2 }); // C5
-  playTone(784.0, t0 + 0.1, 0.22, { wave: 'sine', peakGain: 0.2 }); // G5
+  const ctx = resumeAudio();
+  if (!ctx) return;
+  try {
+    const t0 = ctx.currentTime;
+    playTone(523.25, t0, 0.16, { wave: 'sine', peakGain: 0.2 }); // C5
+    playTone(784.0, t0 + 0.1, 0.22, { wave: 'sine', peakGain: 0.2 }); // G5
+  } catch { /* Never let decorative audio break a verdict render. */ }
+}
+
+/** Recheck is deliberately silent: it is not a verdict, just a request to retry. */
+export function triggerRecheckFeedback() {
+  vibrate([30, 40, 30]);
 }
